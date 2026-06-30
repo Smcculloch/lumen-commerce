@@ -60,40 +60,25 @@ else if (_viewMode == ViewMode.Tree)
                     <strong>Site structure</strong>
                 </div>
                 <div class="card-body p-2">
-                    <ul class="cms-treeview" role="tree">
-                        @foreach (var item in VisibleListItems)
-                        {
-                            var hasChildren = _childrenByParent.ContainsKey(item.Id) && _childrenByParent[item.Id].Count > 0;
-                            var isExpanded = _expandedIds.Contains(item.Id);
-                            var isSelected = _selectedId == item.Id;
-
-                            <li class="cms-treeview-item" role="treeitem" style="padding-left: @(item.Level * 1.25)rem">
-                                <div class="cms-treeview-node @(isSelected ? "is-selected" : null)">
-                                    @if (hasChildren)
-                                    {
-                                        <button type="button" class="cms-treeview-toggle btn btn-sm btn-link p-0"
-                                                title="@(isExpanded ? "Collapse" : "Expand")"
-                                                @onclick="() => ToggleExpand(item.Id)">
-                                            <span class="oi @(isExpanded ? "oi-chevron-bottom" : "oi-chevron-right")"></span>
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span class="cms-treeview-spacer"></span>
-                                    }
-
-                                    <button type="button" class="cms-treeview-label"
-                                            @onclick="() => SelectNodeAsync(item.Id)">
-                                        <span class="oi @(hasChildren ? "oi-folder" : "oi-file") cms-treeview-icon"></span>
-                                        @item.Name
-                                    </button>
-
-                                    <span class="cms-treeview-status cms-treeview-status-@item.Status.ToString().ToLowerInvariant()"
-                                          title="@item.Status"></span>
-                                </div>
-                            </li>
-                        }
-                    </ul>
+                    <ContentTreeBranch Roots="@_roots"
+                                       ChildrenByParent="@_childrenByParent"
+                                       ExpandedIds="@_expandedIds"
+                                       SelectedId="@_selectedId"
+                                       Search="@_search"
+                                       CanReorder="@CanReorder"
+                                       ReorderBusy="@_reorderBusy"
+                                       BusyId="@_busyId"
+                                       DraggedId="@_draggedContentId"
+                                       DragOverId="@_dragOverContentId"
+                                       OnToggleExpand="@ToggleExpandCallback"
+                                       OnSelectNode="@SelectNodeCallback"
+                                       OnMoveUp="@MoveContentUpCallback"
+                                       OnMoveDown="@MoveContentDownCallback"
+                                       OnDragStart="@StartDragCallback"
+                                       OnDragEnd="@ClearDragStateCallback"
+                                       OnDropOnNode="@DropOnNodeCallback"
+                                       OnDragOverNode="@SetDragOverCallback"
+                                       OnDragLeaveNode="@ClearDragOverCallback" />
                 </div>
             </div>
         </div>
@@ -103,11 +88,11 @@ else if (_viewMode == ViewMode.Tree)
                     <strong>Preview</strong>
                 </div>
                 <div class="card-body content-explorer-preview-body p-3">
-                    <ContentPreviewPanel Item="SelectedItem"
-                                         IsBusy="_busyId.HasValue"
-                                         OnPublish="PublishAsync"
-                                         OnUnpublish="UnpublishAsync"
-                                         OnDelete="ConfirmDelete" />
+                    <ContentPreviewPanel Item="@SelectedItem"
+                                         IsBusy="@(_busyId.HasValue)"
+                                         OnPublish="@PublishAsync"
+                                         OnUnpublish="@UnpublishAsync"
+                                         OnDelete="@ConfirmDelete" />
                 </div>
             </div>
         </div>
@@ -133,10 +118,11 @@ else
                     var hasChildren = _childrenByParent.ContainsKey(item.Id) && _childrenByParent[item.Id].Count > 0;
                     var isExpanded = _expandedIds.Contains(item.Id);
                     var parentName = GetParentName(item.ParentId);
+                    var moveAvailability = GetMoveAvailability(item);
 
                     <tr>
                         <td>
-                            <div class="d-flex align-items-center" style="padding-left: @(item.Level * 1.25)rem">
+                            <div class="d-flex align-items-center gap-2" style="padding-left: @(item.Level * 1.25)rem">
                                 @if (hasChildren)
                                 {
                                     <button class="btn btn-sm btn-link p-0 me-2" title="@(isExpanded ? "Collapse" : "Expand")"
@@ -148,7 +134,7 @@ else
                                 {
                                     <span class="tree-list-leaf me-2">└</span>
                                 }
-                                <div>
+                                <div class="flex-grow-1">
                                     <div class="fw-semibold">@item.Name</div>
                                     <div class="text-muted small">
                                         @item.Slug
@@ -158,6 +144,17 @@ else
                                         }
                                     </div>
                                 </div>
+                                @if (CanReorder)
+                                {
+                                    <TreeReorderControls
+                                        CanMoveUp="moveAvailability.CanMoveUp"
+                                        CanMoveDown="moveAvailability.CanMoveDown"
+                                        Disabled="@(_reorderBusy || _busyId.HasValue)"
+                                        OnMoveUp="@(() => MoveContentAsync(item, moveUp: true))"
+                                        OnMoveDown="@(() => MoveContentAsync(item, moveUp: false))"
+                                        OnDragStart="@(() => StartDrag(item.Id))"
+                                        OnDragEnd="@ClearDragState" />
+                                }
                             </div>
                         </td>
                         <td><code class="small">@item.FullPath</code></td>
@@ -232,6 +229,9 @@ else
     private Dictionary<Guid, List<ContentDto>> _childrenByParent = new();
     private Dictionary<Guid, ContentDto> _contentById = new();
     private readonly HashSet<Guid> _expandedIds = [];
+    private Guid? _draggedContentId;
+    private Guid? _dragOverContentId;
+    private bool _reorderBusy;
 
     [SupplyParameterFromQuery]
     public string? Saved { get; set; }
@@ -331,11 +331,38 @@ else
         }
     }
 
-    private Task SelectNodeAsync(Guid? id)
+    private Task SelectNodeAsync(Guid id)
     {
         _selectedId = id;
         return Task.CompletedTask;
     }
+
+    private EventCallback<Guid> ToggleExpandCallback =>
+        EventCallback.Factory.Create<Guid>(this, ToggleExpand);
+
+    private EventCallback<Guid> SelectNodeCallback =>
+        EventCallback.Factory.Create<Guid>(this, SelectNodeAsync);
+
+    private EventCallback<ContentDto> MoveContentUpCallback =>
+        EventCallback.Factory.Create<ContentDto>(this, item => MoveContentAsync(item, moveUp: true));
+
+    private EventCallback<ContentDto> MoveContentDownCallback =>
+        EventCallback.Factory.Create<ContentDto>(this, item => MoveContentAsync(item, moveUp: false));
+
+    private EventCallback<Guid> StartDragCallback =>
+        EventCallback.Factory.Create<Guid>(this, StartDrag);
+
+    private EventCallback ClearDragStateCallback =>
+        EventCallback.Factory.Create(this, ClearDragState);
+
+    private EventCallback<ContentDto> DropOnNodeCallback =>
+        EventCallback.Factory.Create<ContentDto>(this, DropOnNodeAsync);
+
+    private EventCallback<Guid> SetDragOverCallback =>
+        EventCallback.Factory.Create<Guid>(this, SetDragOver);
+
+    private EventCallback ClearDragOverCallback =>
+        EventCallback.Factory.Create(this, ClearDragOver);
 
     private void EnsureSelection()
     {
@@ -420,5 +447,102 @@ else
     {
         _bannerMessage = null;
         _bannerIsError = false;
+    }
+
+    private bool CanReorder => string.IsNullOrWhiteSpace(_search);
+
+    private IReadOnlyList<ContentDto> GetContentSiblings(ContentDto item) =>
+        TreeReorderHelper.GetSiblings(
+            item,
+            _roots,
+            _childrenByParent,
+            c => c.ParentId,
+            c => c.SortOrder,
+            c => c.Name);
+
+    private (bool CanMoveUp, bool CanMoveDown) GetMoveAvailability(ContentDto item)
+    {
+        var siblings = GetContentSiblings(item);
+        return TreeReorderHelper.GetMoveAvailability(siblings, item.Id, c => c.Id);
+    }
+
+    private void StartDrag(Guid id) => _draggedContentId = id;
+
+    private void SetDragOver(Guid id)
+    {
+        if (_draggedContentId.HasValue)
+        {
+            _dragOverContentId = id;
+        }
+    }
+
+    private void ClearDragOver() => _dragOverContentId = null;
+
+    private void ClearDragState()
+    {
+        _draggedContentId = null;
+        _dragOverContentId = null;
+    }
+
+    private async Task MoveContentAsync(ContentDto item, bool moveUp)
+    {
+        var siblings = GetContentSiblings(item);
+        var orderedIds = moveUp
+            ? TreeReorderHelper.MoveUp(siblings, item.Id, c => c.Id)
+            : TreeReorderHelper.MoveDown(siblings, item.Id, c => c.Id);
+
+        if (orderedIds is null)
+        {
+            return;
+        }
+
+        await ReorderContentAsync(item.ParentId, orderedIds);
+    }
+
+    private async Task DropOnNodeAsync(ContentDto target)
+    {
+        if (_draggedContentId is not Guid draggedId || !_contentById.TryGetValue(draggedId, out var dragged))
+        {
+            ClearDragState();
+            return;
+        }
+
+        if (dragged.ParentId != target.ParentId)
+        {
+            ClearDragState();
+            return;
+        }
+
+        var siblings = GetContentSiblings(dragged);
+        var orderedIds = TreeReorderHelper.ReorderAfterDrop(siblings, draggedId, target.Id, c => c.Id);
+        ClearDragState();
+
+        if (orderedIds is null)
+        {
+            return;
+        }
+
+        await ReorderContentAsync(dragged.ParentId, orderedIds);
+    }
+
+    private async Task ReorderContentAsync(Guid? parentId, IReadOnlyList<Guid> orderedIds)
+    {
+        _reorderBusy = true;
+        try
+        {
+            await ContentService.ReorderSiblingsAsync(parentId, orderedIds);
+            await ReloadAsync();
+            _bannerMessage = "Content order updated.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _reorderBusy = false;
+        }
     }
 }

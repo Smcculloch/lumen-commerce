@@ -1,4 +1,5 @@
 using Lumen.Application.Categories.Dtos;
+using Lumen.Application.Common;
 using Lumen.Domain.Categories;
 
 namespace Lumen.Application.Categories;
@@ -107,6 +108,30 @@ public sealed class CategoryService : ICategoryService
         }
 
         await _repository.DeleteAsync(category, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReorderSiblingsAsync(
+        Guid? parentId,
+        IReadOnlyList<Guid> orderedIds,
+        CancellationToken cancellationToken = default)
+    {
+        var siblings = parentId is null
+            ? await _repository.GetRootsAsync(cancellationToken)
+            : await _repository.GetChildrenAsync(parentId.Value, cancellationToken);
+
+        TreeSiblingReorder.ValidateSiblingOrder(
+            siblings.Select(s => s.Id).ToHashSet(),
+            orderedIds);
+
+        var siblingsById = siblings.ToDictionary(s => s.Id);
+        for (var index = 0; index < orderedIds.Count; index++)
+        {
+            var category = siblingsById[orderedIds[index]];
+            category.SetSortOrder(TreeSiblingReorder.SortOrderForIndex(index));
+            await _repository.UpdateAsync(category, cancellationToken);
+        }
+
         await _repository.SaveChangesAsync(cancellationToken);
     }
 

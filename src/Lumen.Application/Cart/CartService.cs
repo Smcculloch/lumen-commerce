@@ -2,6 +2,7 @@ using Lumen.Application.Cart.Dtos;
 using Lumen.Application.Products;
 using Lumen.Domain.Cart;
 using Lumen.Domain.Enums;
+using Lumen.Shared.Extensions;
 
 namespace Lumen.Application.Cart;
 
@@ -203,35 +204,16 @@ public sealed class CartService : ICartService
             var variant = product.Variants.FirstOrDefault(v => v.Id == variantId)
                 ?? throw new InvalidOperationException("Product variant was not found.");
 
-            var variantPrice = TryGetPrice(variant.Properties) ?? TryGetPrice(product.Properties)
+            var variantPrice = variant.Properties.GetDecimal("price") ?? product.Properties.GetDecimal("price")
                 ?? throw new InvalidOperationException("Product variant has no price.");
 
             return (variant.Sku, variant.Name, variantPrice);
         }
 
-        var price = TryGetPrice(product.Properties)
+        var price = product.Properties.GetDecimal("price")
             ?? throw new InvalidOperationException("Product has no price.");
 
         return (product.Sku, product.Name, price);
-    }
-
-    private static decimal? TryGetPrice(IReadOnlyDictionary<string, object?> properties)
-    {
-        if (!properties.TryGetValue("price", out var raw) || raw is null)
-        {
-            return null;
-        }
-
-        return raw switch
-        {
-            decimal d => d,
-            double dbl => (decimal)dbl,
-            float f => (decimal)f,
-            int i => i,
-            long l => l,
-            string s when decimal.TryParse(s, out var parsed) => parsed,
-            _ => null
-        };
     }
 
     private static CartDto Map(ShoppingCart cart) =>

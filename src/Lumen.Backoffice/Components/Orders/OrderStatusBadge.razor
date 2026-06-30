@@ -1,0 +1,18 @@
+@using Lumen.Domain.Enums
+
+<span class="badge @CssClass">@Status</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public OrderStatus Status { get; set; }
+
+    private string CssClass => Status switch
+    {
+        OrderStatus.Pending => "bg-warning text-dark",
+        OrderStatus.Processing => "bg-info text-dark",
+        OrderStatus.Shipped => "bg-primary",
+        OrderStatus.Completed => "bg-success",
+        OrderStatus.Cancelled => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+}

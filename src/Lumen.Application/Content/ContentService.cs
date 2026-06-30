@@ -1,3 +1,4 @@
+using Lumen.Application.Common;
 using Lumen.Application.Content.Dtos;
 using Lumen.Application.Templates;
 using Lumen.Application.Templates.Validation;
@@ -191,6 +192,30 @@ public sealed class ContentService : IContentService
         }
 
         await _repository.DeleteAsync(item, cancellationToken);
+        await _repository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReorderSiblingsAsync(
+        Guid? parentId,
+        IReadOnlyList<Guid> orderedIds,
+        CancellationToken cancellationToken = default)
+    {
+        var siblings = parentId is null
+            ? await _repository.GetRootsAsync(cancellationToken)
+            : await _repository.GetChildrenAsync(parentId.Value, cancellationToken);
+
+        TreeSiblingReorder.ValidateSiblingOrder(
+            siblings.Select(s => s.Id).ToHashSet(),
+            orderedIds);
+
+        var siblingsById = siblings.ToDictionary(s => s.Id);
+        for (var index = 0; index < orderedIds.Count; index++)
+        {
+            var item = siblingsById[orderedIds[index]];
+            item.SetSortOrder(TreeSiblingReorder.SortOrderForIndex(index));
+            await _repository.UpdateAsync(item, cancellationToken);
+        }
+
         await _repository.SaveChangesAsync(cancellationToken);
     }
 

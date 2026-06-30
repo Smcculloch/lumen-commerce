@@ -8,5 +8,6 @@ public static class TemplateKeys
     public const string StandardPage = "standard-page";
     public const string ArticlePage = "article-page";
     public const string ShopPage = "shop-page";
+    public const string CheckoutPage = "checkout-page";
     public const string StandardProduct = "standard-product";
 }

@@ -4,6 +4,7 @@ using Lumen.Domain.Categories;
 using Lumen.Domain.Content;
 using Lumen.Domain.Customers;
 using Lumen.Domain.Media;
+using Lumen.Domain.Orders;
 using Lumen.Domain.Products;
 using Lumen.Infrastructure.Persistence.Entities;
 
@@ -238,4 +239,93 @@ internal static class InstanceMapping
             CreatedAt = item.CreatedAt,
             UpdatedAt = item.UpdatedAt
         };
+
+    public static Order ToDomain(OrderEntity entity) =>
+        Order.Rehydrate(
+            entity.Id,
+            entity.OrderNumber,
+            entity.CustomerId,
+            entity.CustomerName,
+            entity.Email,
+            ToDomainShippingAddress(entity),
+            ToDomainBillingAddress(entity),
+            entity.OrderNotes,
+            entity.Status,
+            entity.Subtotal,
+            entity.CreatedAt,
+            entity.UpdatedAt,
+            entity.Items.Select(ToDomain));
+
+    public static OrderLineItem ToDomain(OrderLineItemEntity entity) =>
+        OrderLineItem.Rehydrate(
+            entity.Id,
+            entity.OrderId,
+            entity.ProductId,
+            entity.ProductVariantId,
+            entity.Sku,
+            entity.ProductName,
+            entity.Quantity,
+            entity.UnitPrice);
+
+    public static OrderEntity ToEntity(Order order) =>
+        new()
+        {
+            Id = order.Id,
+            OrderNumber = order.OrderNumber,
+            CustomerId = order.CustomerId,
+            CustomerName = order.CustomerName,
+            Email = order.Email,
+            ShippingName = order.ShippingAddress.Name,
+            ShippingLine1 = order.ShippingAddress.Line1,
+            ShippingLine2 = order.ShippingAddress.Line2,
+            ShippingCity = order.ShippingAddress.City,
+            ShippingRegion = order.ShippingAddress.Region,
+            ShippingPostalCode = order.ShippingAddress.PostalCode,
+            ShippingCountry = order.ShippingAddress.Country,
+            BillingName = order.BillingAddress.Name,
+            BillingLine1 = order.BillingAddress.Line1,
+            BillingLine2 = order.BillingAddress.Line2,
+            BillingCity = order.BillingAddress.City,
+            BillingRegion = order.BillingAddress.Region,
+            BillingPostalCode = order.BillingAddress.PostalCode,
+            BillingCountry = order.BillingAddress.Country,
+            OrderNotes = order.OrderNotes,
+            Status = order.Status,
+            Subtotal = order.Subtotal,
+            CreatedAt = order.CreatedAt,
+            UpdatedAt = order.UpdatedAt
+        };
+
+    public static OrderLineItemEntity ToEntity(OrderLineItem item) =>
+        new()
+        {
+            Id = item.Id,
+            OrderId = item.OrderId,
+            ProductId = item.ProductId,
+            ProductVariantId = item.ProductVariantId,
+            Sku = item.Sku,
+            ProductName = item.ProductName,
+            Quantity = item.Quantity,
+            UnitPrice = item.UnitPrice
+        };
+
+    private static OrderAddress ToDomainShippingAddress(OrderEntity entity) =>
+        OrderAddress.Rehydrate(
+            entity.ShippingName,
+            entity.ShippingLine1,
+            entity.ShippingLine2,
+            entity.ShippingCity,
+            entity.ShippingRegion,
+            entity.ShippingPostalCode,
+            entity.ShippingCountry);
+
+    private static OrderAddress ToDomainBillingAddress(OrderEntity entity) =>
+        OrderAddress.Rehydrate(
+            entity.BillingName,
+            entity.BillingLine1,
+            entity.BillingLine2,
+            entity.BillingCity,
+            entity.BillingRegion,
+            entity.BillingPostalCode,
+            entity.BillingCountry);
 }

@@ -1,18 +1,202 @@
+@model Lumen.Storefront.Models.CheckoutPageViewModel
 @{
-    ViewData["Title"] = "Checkout";
+    ViewData["Title"] = Model.Content.Title;
 }
 
-<h1 class="mb-3">Checkout</h1>
+<article>
+    <header class="mb-4">
+        <h1 class="display-6">@Model.Content.Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Model.Content.Introduction))
+        {
+            <p class="lead text-muted">@Model.Content.Introduction</p>
+        }
+    </header>
 
-<div class="alert alert-info">
-    <h2 class="h5">Coming in Phase 6</h2>
-    <p class="mb-0">
-        Multi-step checkout, order creation, and payment processing will be implemented in the next phase.
-        Your cart is saved — you can continue shopping or review your cart before checkout launches.
-    </p>
-</div>
+    @if (!string.IsNullOrWhiteSpace(Model.Content.Body))
+    {
+        <div class="cms-body mb-4">
+            @Html.Raw(Model.Content.Body)
+        </div>
+    }
 
-<div class="d-flex gap-2">
-    <a class="btn btn-outline-primary" href="/cart">Back to cart</a>
-    <a class="btn btn-outline-secondary" href="/shop">Continue shopping</a>
-</div>
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <section class="card mb-4" aria-labelledby="checkout-form-heading">
+                <div class="card-header">
+                    <h2 id="checkout-form-heading" class="h5 mb-0">Order details</h2>
+                </div>
+                <div class="card-body">
+                    @if (!Model.IsAuthenticated)
+                    {
+                        <p class="text-muted small mb-3">Checking out as a guest — no account required.</p>
+                    }
+
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <form method="post" action="/checkout" id="checkout-form">
+                        @Html.AntiForgeryToken()
+
+                        <fieldset class="mb-4">
+                            <legend class="h6">Contact</legend>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label asp-for="Form.CustomerName" class="form-label"></label>
+                                    <input asp-for="Form.CustomerName" class="form-control" />
+                                    <span asp-validation-for="Form.CustomerName" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Form.Email" class="form-label"></label>
+                                    <input asp-for="Form.Email" class="form-control" type="email" />
+                                    <span asp-validation-for="Form.Email" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="mb-4">
+                            <legend class="h6">Shipping address</legend>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label asp-for="Form.ShippingName" class="form-label"></label>
+                                    <input asp-for="Form.ShippingName" class="form-control" />
+                                    <span asp-validation-for="Form.ShippingName" class="text-danger small"></span>
+                                </div>
+                                <div class="col-12">
+                                    <label asp-for="Form.ShippingLine1" class="form-label"></label>
+                                    <input asp-for="Form.ShippingLine1" class="form-control" />
+                                    <span asp-validation-for="Form.ShippingLine1" class="text-danger small"></span>
+                                </div>
+                                <div class="col-12">
+                                    <label asp-for="Form.ShippingLine2" class="form-label"></label>
+                                    <input asp-for="Form.ShippingLine2" class="form-control" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Form.ShippingCity" class="form-label"></label>
+                                    <input asp-for="Form.ShippingCity" class="form-control" />
+                                    <span asp-validation-for="Form.ShippingCity" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="Form.ShippingRegion" class="form-label"></label>
+                                    <input asp-for="Form.ShippingRegion" class="form-control" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="Form.ShippingPostalCode" class="form-label"></label>
+                                    <input asp-for="Form.ShippingPostalCode" class="form-control" />
+                                    <span asp-validation-for="Form.ShippingPostalCode" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Form.ShippingCountry" class="form-label"></label>
+                                    <input asp-for="Form.ShippingCountry" class="form-control" />
+                                    <span asp-validation-for="Form.ShippingCountry" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <fieldset class="mb-4">
+                            <legend class="h6">Billing address</legend>
+                            <div class="form-check mb-3">
+                                <input asp-for="Form.BillingSameAsShipping" class="form-check-input" id="billing-same" />
+                                <label class="form-check-label" for="billing-same">Same as shipping address</label>
+                            </div>
+                            <div id="billing-fields" class="row g-3">
+                                <div class="col-12">
+                                    <label asp-for="Form.BillingName" class="form-label"></label>
+                                    <input asp-for="Form.BillingName" class="form-control billing-field" />
+                                    <span asp-validation-for="Form.BillingName" class="text-danger small"></span>
+                                </div>
+                                <div class="col-12">
+                                    <label asp-for="Form.BillingLine1" class="form-label"></label>
+                                    <input asp-for="Form.BillingLine1" class="form-control billing-field" />
+                                    <span asp-validation-for="Form.BillingLine1" class="text-danger small"></span>
+                                </div>
+                                <div class="col-12">
+                                    <label asp-for="Form.BillingLine2" class="form-label"></label>
+                                    <input asp-for="Form.BillingLine2" class="form-control billing-field" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Form.BillingCity" class="form-label"></label>
+                                    <input asp-for="Form.BillingCity" class="form-control billing-field" />
+                                    <span asp-validation-for="Form.BillingCity" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="Form.BillingRegion" class="form-label"></label>
+                                    <input asp-for="Form.BillingRegion" class="form-control billing-field" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label asp-for="Form.BillingPostalCode" class="form-label"></label>
+                                    <input asp-for="Form.BillingPostalCode" class="form-control billing-field" />
+                                    <span asp-validation-for="Form.BillingPostalCode" class="text-danger small"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <label asp-for="Form.BillingCountry" class="form-label"></label>
+                                    <input asp-for="Form.BillingCountry" class="form-control billing-field" />
+                                    <span asp-validation-for="Form.BillingCountry" class="text-danger small"></span>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <div class="mb-4">
+                            <label asp-for="Form.OrderNotes" class="form-label"></label>
+                            <textarea asp-for="Form.OrderNotes" class="form-control" rows="3"></textarea>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(Model.TermsAndPolicies))
+                        {
+                            <div class="cms-body border rounded p-3 mb-4 small text-muted">
+                                @Html.Raw(Model.TermsAndPolicies)
+                            </div>
+                        }
+
+                        <button type="submit" class="btn btn-primary btn-lg">Place order</button>
+                        <a class="btn btn-link" href="/cart">Back to cart</a>
+                    </form>
+                </div>
+            </section>
+        </div>
+
+        <div class="col-lg-5">
+            <section class="card sticky-top" style="top: 1rem" aria-labelledby="cart-summary-heading">
+                <div class="card-header">
+                    <h2 id="cart-summary-heading" class="h5 mb-0">Cart summary</h2>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        @foreach (var item in Model.Cart.Items)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-semibold">@item.ProductName</div>
+                                    <div class="text-muted small">
+                                        <code>@item.Sku</code> · Qty @item.Quantity
+                                    </div>
+                                </div>
+                                <div class="text-end fw-semibold">@item.LineTotal.ToString("C")</div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <span class="text-muted">@Model.Cart.ItemCount item(s)</span>
+                    <span class="fs-5 fw-semibold">@Model.Cart.Subtotal.ToString("C")</span>
+                </div>
+            </section>
+        </div>
+    </div>
+</article>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const sameCheckbox = document.getElementById('billing-same');
+            const billingFields = document.getElementById('billing-fields');
+            if (!sameCheckbox || !billingFields) return;
+
+            function toggleBilling() {
+                billingFields.style.display = sameCheckbox.checked ? 'none' : '';
+            }
+
+            sameCheckbox.addEventListener('change', toggleBilling);
+            toggleBilling();
+        })();
+    </script>
+}

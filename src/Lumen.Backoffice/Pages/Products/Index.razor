@@ -86,9 +86,15 @@ else
                             var hasChildren = _childrenByParent.ContainsKey(item.Id) && _childrenByParent[item.Id].Count > 0;
                             var isExpanded = _expandedIds.Contains(item.Id);
                             var isSelected = _selectedCategoryId == item.Id;
+                            var moveAvailability = GetMoveAvailability(item);
 
-                            <li class="cms-treeview-item" role="treeitem" style="padding-left: @(item.Level * 1.25)rem">
-                                <div class="cms-treeview-node @(isSelected ? "is-selected" : null)">
+                            <li class="cms-treeview-item" role="treeitem" style="padding-left: @(item.Level * 1.25)rem"
+                                @ondragover:preventDefault="true"
+                                @ondragover="() => SetDragOver(item.Id)"
+                                @ondragleave="ClearDragOver"
+                                @ondrop="() => DropOnNodeAsync(item)"
+                                @ondrop:preventDefault="true">
+                                <div class="cms-treeview-node @GetNodeClasses(item.Id, isSelected)">
                                     @if (hasChildren)
                                     {
                                         <button type="button" class="cms-treeview-toggle btn btn-sm btn-link p-0"
@@ -105,6 +111,15 @@ else
                                         <span class="oi @(hasChildren ? "oi-folder" : "oi-tag") cms-treeview-icon"></span>
                                         @item.Name
                                     </button>
+
+                                    <TreeReorderControls
+                                        CanMoveUp="moveAvailability.CanMoveUp"
+                                        CanMoveDown="moveAvailability.CanMoveDown"
+                                        Disabled="@(_reorderBusy || _busyId.HasValue)"
+                                        OnMoveUp="@(() => MoveCategoryAsync(item, moveUp: true))"
+                                        OnMoveDown="@(() => MoveCategoryAsync(item, moveUp: false))"
+                                        OnDragStart="@(() => StartDrag(item.Id))"
+                                        OnDragEnd="@ClearDragState" />
                                 </div>
                             </li>
                         }
@@ -216,6 +231,9 @@ else
     private Dictionary<Guid, CategoryDto> _categoryById = new();
     private IReadOnlyList<ProductDto> _products = [];
     private readonly HashSet<Guid> _expandedIds = [];
+    private Guid? _draggedCategoryId;
+    private Guid? _dragOverCategoryId;
+    private bool _reorderBusy;
 
     [SupplyParameterFromQuery]
     public string? Saved { get; set; }
@@ -385,5 +403,121 @@ else
     {
         _bannerMessage = null;
         _bannerIsError = false;
+    }
+
+    private string? GetNodeClasses(Guid id, bool isSelected)
+    {
+        var classes = new List<string>();
+        if (isSelected)
+        {
+            classes.Add("is-selected");
+        }
+
+        if (_draggedCategoryId == id)
+        {
+            classes.Add("is-dragging");
+        }
+
+        if (_dragOverCategoryId == id)
+        {
+            classes.Add("is-drag-over");
+        }
+
+        return classes.Count == 0 ? null : string.Join(' ', classes);
+    }
+
+    private IReadOnlyList<CategoryDto> GetCategorySiblings(CategoryDto item) =>
+        TreeReorderHelper.GetSiblings(
+            item,
+            _roots,
+            _childrenByParent,
+            c => c.ParentId,
+            c => c.SortOrder,
+            c => c.Name);
+
+    private (bool CanMoveUp, bool CanMoveDown) GetMoveAvailability(CategoryDto item)
+    {
+        var siblings = GetCategorySiblings(item);
+        return TreeReorderHelper.GetMoveAvailability(siblings, item.Id, c => c.Id);
+    }
+
+    private void StartDrag(Guid id) => _draggedCategoryId = id;
+
+    private void SetDragOver(Guid id)
+    {
+        if (_draggedCategoryId.HasValue)
+        {
+            _dragOverCategoryId = id;
+        }
+    }
+
+    private void ClearDragOver() => _dragOverCategoryId = null;
+
+    private void ClearDragState()
+    {
+        _draggedCategoryId = null;
+        _dragOverCategoryId = null;
+    }
+
+    private async Task MoveCategoryAsync(CategoryDto item, bool moveUp)
+    {
+        var siblings = GetCategorySiblings(item);
+        var orderedIds = moveUp
+            ? TreeReorderHelper.MoveUp(siblings, item.Id, c => c.Id)
+            : TreeReorderHelper.MoveDown(siblings, item.Id, c => c.Id);
+
+        if (orderedIds is null)
+        {
+            return;
+        }
+
+        await ReorderCategoriesAsync(item.ParentId, orderedIds);
+    }
+
+    private async Task DropOnNodeAsync(CategoryDto target)
+    {
+        if (_draggedCategoryId is not Guid draggedId || !_categoryById.TryGetValue(draggedId, out var dragged))
+        {
+            ClearDragState();
+            return;
+        }
+
+        if (dragged.ParentId != target.ParentId)
+        {
+            ClearDragState();
+            return;
+        }
+
+        var siblings = GetCategorySiblings(dragged);
+        var orderedIds = TreeReorderHelper.ReorderAfterDrop(siblings, draggedId, target.Id, c => c.Id);
+        ClearDragState();
+
+        if (orderedIds is null)
+        {
+            return;
+        }
+
+        await ReorderCategoriesAsync(dragged.ParentId, orderedIds);
+    }
+
+    private async Task ReorderCategoriesAsync(Guid? parentId, IReadOnlyList<Guid> orderedIds)
+    {
+        _reorderBusy = true;
+        try
+        {
+            await CategoryService.ReorderSiblingsAsync(parentId, orderedIds);
+            await ReloadAsync();
+            _bannerMessage = "Category order updated.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _reorderBusy = false;
+        }
     }
 }

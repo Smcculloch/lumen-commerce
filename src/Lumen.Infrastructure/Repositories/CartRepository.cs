@@ -70,7 +70,7 @@ public sealed class CartRepository : ICartRepository
             var existing = entity.Items.FirstOrDefault(i => i.Id == item.Id);
             if (existing is null)
             {
-                entity.Items.Add(InstanceMapping.ToEntity(item));
+                await _dbContext.CartItems.AddAsync(InstanceMapping.ToEntity(item), cancellationToken);
             }
             else
             {

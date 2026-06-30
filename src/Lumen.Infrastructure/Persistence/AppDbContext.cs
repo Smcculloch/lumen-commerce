@@ -25,6 +25,8 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CustomerEntity> Customers => Set<CustomerEntity>();
     public DbSet<CartEntity> Carts => Set<CartEntity>();
     public DbSet<CartItemEntity> CartItems => Set<CartItemEntity>();
+    public DbSet<OrderEntity> Orders => Set<OrderEntity>();
+    public DbSet<OrderLineItemEntity> OrderLineItems => Set<OrderLineItemEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -168,6 +170,50 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.HasOne(x => x.Cart)
                 .WithMany(x => x.Items)
                 .HasForeignKey(x => x.CartId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrderEntity>(entity =>
+        {
+            entity.ToTable("Orders");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.OrderNumber).IsUnique();
+            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.Property(x => x.OrderNumber).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.CustomerName).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Email).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.ShippingName).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.ShippingLine1).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.ShippingLine2).HasMaxLength(256);
+            entity.Property(x => x.ShippingCity).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ShippingRegion).HasMaxLength(128);
+            entity.Property(x => x.ShippingPostalCode).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.ShippingCountry).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.BillingName).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.BillingLine1).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.BillingLine2).HasMaxLength(256);
+            entity.Property(x => x.BillingCity).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.BillingRegion).HasMaxLength(128);
+            entity.Property(x => x.BillingPostalCode).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.BillingCountry).HasMaxLength(128).IsRequired();
+            entity.HasOne(x => x.Customer)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<OrderLineItemEntity>(entity =>
+        {
+            entity.ToTable("OrderLineItems");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.OrderId, x.ProductId, x.ProductVariantId });
+            entity.Property(x => x.Sku).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ProductName).HasMaxLength(256).IsRequired();
+            entity.HasOne(x => x.Order)
+                .WithMany(x => x.Items)
+                .HasForeignKey(x => x.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

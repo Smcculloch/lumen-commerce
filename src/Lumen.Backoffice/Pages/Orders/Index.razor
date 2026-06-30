@@ -1,0 +1,115 @@
+@page "/orders"
+@using Lumen.Application.Orders
+@using Lumen.Application.Orders.Dtos
+@using Lumen.Backoffice.Components.Orders
+@using Lumen.Domain.Enums
+@inject IOrderService OrderService
+
+<PageTitle>Orders</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="mb-0">Orders</h1>
+        <p class="text-muted mb-0">View and manage storefront orders.</p>
+    </div>
+</div>
+
+<div class="row g-2 mb-3 align-items-end">
+    <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">Search</label>
+        <input class="form-control" placeholder="Order number, email, or name..."
+               @bind="_search" @bind:event="oninput" @bind:after="ReloadAsync" />
+    </div>
+    <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Status</label>
+        <select class="form-select" @bind="_statusFilter" @bind:after="ReloadAsync">
+            <option value="">All statuses</option>
+            @foreach (var status in Enum.GetValues<OrderStatus>())
+            {
+                <option value="@status">@status</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading orders...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_orders.Count == 0)
+{
+    <div class="alert alert-info">No orders match the current filters.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th class="text-end">Total</th>
+                    <th>Placed</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var order in _orders)
+                {
+                    <tr>
+                        <td><code>@order.OrderNumber</code></td>
+                        <td>@order.CustomerName</td>
+                        <td class="small">@order.Email</td>
+                        <td><OrderStatusBadge Status="@order.Status" /></td>
+                        <td class="text-end fw-semibold">@order.Subtotal.ToString("C")</td>
+                        <td class="text-muted small">@order.CreatedAt.LocalDateTime.ToString("g")</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" href="orders/@order.Id">View</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private IReadOnlyList<OrderDto> _orders = [];
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            OrderStatus? status = string.IsNullOrWhiteSpace(_statusFilter)
+                ? null
+                : Enum.Parse<OrderStatus>(_statusFilter);
+
+            _orders = await OrderService.ListAsync(new OrderListFilter(
+                Status: status,
+                Search: string.IsNullOrWhiteSpace(_search) ? null : _search));
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,0 +1,241 @@
+@page "/orders/{Id:guid}"
+@using Lumen.Application.Orders
+@using Lumen.Application.Orders.Dtos
+@using Lumen.Backoffice.Components.Orders
+@using Lumen.Domain.Enums
+@inject IOrderService OrderService
+
+<PageTitle>Order</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="orders">Orders</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@(_order?.OrderNumber ?? "Details")</li>
+    </ol>
+</nav>
+
+@if (_loading)
+{
+    <p><em>Loading order...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_order is not null)
+{
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+        <div>
+            <h1 class="mb-1"><code>@_order.OrderNumber</code></h1>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <OrderStatusBadge Status="@_order.Status" />
+                <span class="text-muted small">Placed @_order.CreatedAt.LocalDateTime.ToString("f")</span>
+            </div>
+        </div>
+        <div class="d-flex align-items-end gap-2">
+            <div>
+                <label class="form-label small text-muted mb-1">Update status</label>
+                <select class="form-select form-select-sm" @bind="_selectedStatus" disabled="@_saving">
+                    @foreach (var status in Enum.GetValues<OrderStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+            <button class="btn btn-sm btn-primary" disabled="@(_saving || _selectedStatus == _order.Status)" @onclick="SaveStatusAsync">
+                @(_saving ? "Saving..." : "Save")
+            </button>
+        </div>
+    </div>
+
+    @if (_bannerMessage is not null)
+    {
+        <div class="alert @(_bannerIsError ? "alert-danger" : "alert-success")">@_bannerMessage</div>
+    }
+
+    <div class="row g-3">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">Customer</div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Name</dt>
+                        <dd class="col-sm-8">@_order.CustomerName</dd>
+                        <dt class="col-sm-4">Email</dt>
+                        <dd class="col-sm-8">@_order.Email</dd>
+                        <dt class="col-sm-4">Customer ID</dt>
+                        <dd class="col-sm-8">
+                            @if (_order.CustomerId is Guid customerId)
+                            {
+                                <a href="customers/@customerId"><code class="small">@customerId</code></a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Guest checkout</span>
+                            }
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">Order notes</div>
+                <div class="card-body">
+                    @if (string.IsNullOrWhiteSpace(_order.OrderNotes))
+                    {
+                        <span class="text-muted">No notes provided.</span>
+                    }
+                    else
+                    {
+                        <p class="mb-0">@_order.OrderNotes</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Shipping address</div>
+                <div class="card-body">
+                    <address class="mb-0">
+                        <strong>@_order.ShippingAddress.Name</strong><br />
+                        @_order.ShippingAddress.Line1<br />
+                        @if (!string.IsNullOrWhiteSpace(_order.ShippingAddress.Line2))
+                        {
+                            @_order.ShippingAddress.Line2<br />
+                        }
+                        @_order.ShippingAddress.PostalCode @_order.ShippingAddress.City<br />
+                        @if (!string.IsNullOrWhiteSpace(_order.ShippingAddress.Region))
+                        {
+                            @_order.ShippingAddress.Region<br />
+                        }
+                        @_order.ShippingAddress.Country
+                    </address>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Billing address</div>
+                <div class="card-body">
+                    <address class="mb-0">
+                        <strong>@_order.BillingAddress.Name</strong><br />
+                        @_order.BillingAddress.Line1<br />
+                        @if (!string.IsNullOrWhiteSpace(_order.BillingAddress.Line2))
+                        {
+                            @_order.BillingAddress.Line2<br />
+                        }
+                        @_order.BillingAddress.PostalCode @_order.BillingAddress.City<br />
+                        @if (!string.IsNullOrWhiteSpace(_order.BillingAddress.Region))
+                        {
+                            @_order.BillingAddress.Region<br />
+                        }
+                        @_order.BillingAddress.Country
+                    </address>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Line items</span>
+            <span class="fw-semibold">@_order.Subtotal.ToString("C")</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit price</th>
+                        <th class="text-end">Line total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _order.Items)
+                    {
+                        <tr>
+                            <td>@item.ProductName</td>
+                            <td><code class="small">@item.Sku</code></td>
+                            <td class="text-end">@item.Quantity</td>
+                            <td class="text-end">@item.UnitPrice.ToString("C")</td>
+                            <td class="text-end fw-semibold">@item.LineTotal.ToString("C")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <a class="btn btn-outline-secondary mt-3" href="orders">Back to orders</a>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private OrderDto? _order;
+    private OrderStatus _selectedStatus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _bannerMessage = null;
+
+        try
+        {
+            _order = await OrderService.GetByIdAsync(Id);
+            if (_order is null)
+            {
+                _error = "Order not found.";
+            }
+            else
+            {
+                _selectedStatus = _order.Status;
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveStatusAsync()
+    {
+        if (_order is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _bannerMessage = null;
+
+        try
+        {
+            _order = await OrderService.UpdateStatusAsync(_order.Id, _selectedStatus);
+            _bannerMessage = "Order status updated.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

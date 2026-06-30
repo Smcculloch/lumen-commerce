@@ -18,4 +18,5 @@ public interface IContentService
     Task<ContentDto> PublishContentAsync(Guid id, CancellationToken cancellationToken = default);
     Task<ContentDto> UnpublishContentAsync(Guid id, CancellationToken cancellationToken = default);
     Task DeleteContentAsync(Guid id, CancellationToken cancellationToken = default);
+    Task ReorderSiblingsAsync(Guid? parentId, IReadOnlyList<Guid> orderedIds, CancellationToken cancellationToken = default);
 }

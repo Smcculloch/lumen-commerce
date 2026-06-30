@@ -1,0 +1,31 @@
+<div class="cms-treeview-reorder btn-group btn-group-sm" @onclick:stopPropagation="true">
+    <button type="button"
+            class="btn btn-outline-secondary py-0 px-1"
+            title="Move up"
+            disabled="@(!CanMoveUp || Disabled)"
+            @onclick="OnMoveUp">
+        <span class="oi oi-chevron-top" aria-hidden="true"></span>
+    </button>
+    <button type="button"
+            class="btn btn-outline-secondary py-0 px-1"
+            title="Move down"
+            disabled="@(!CanMoveDown || Disabled)"
+            @onclick="OnMoveDown">
+        <span class="oi oi-chevron-bottom" aria-hidden="true"></span>
+    </button>
+    <span class="btn btn-outline-secondary py-0 px-1 cms-treeview-drag"
+          title="Drag to reorder"
+          draggable="@(!Disabled)"
+          @ondragstart="OnDragStart"
+          @ondragend="OnDragEnd">⋮⋮</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback OnMoveUp { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnMoveDown { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnDragStart { get; set; }
+    [Parameter] public EventCallback OnDragEnd { get; set; }
+    [Parameter] public bool CanMoveUp { get; set; }
+    [Parameter] public bool CanMoveDown { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+}

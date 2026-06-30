@@ -1,0 +1,158 @@
+@using Lumen.Application.Content.Dtos
+@using Lumen.Backoffice.Components.Shared
+
+<ul class="@(ParentId is null ? "cms-treeview" : "cms-treeview-children")"
+    role="@(ParentId is null ? "tree" : "group")"
+    aria-label="@(ParentId is null ? null : "Child pages")">
+    @foreach (var item in GetItems())
+    {
+        @if (ShouldRender(item))
+        {
+            var hasChildren = ChildrenByParent.TryGetValue(item.Id, out var kids) && kids.Count > 0;
+            var isExpanded = ExpandedIds.Contains(item.Id);
+            var isSelected = SelectedId == item.Id;
+            var moveAvailability = GetMoveAvailability(item);
+
+            <li class="@GetItemClass(item)" role="treeitem" aria-level="@(item.Level + 1)"
+                @ondragover:preventDefault="true"
+                @ondragover="() => OnDragOverNode.InvokeAsync(item.Id)"
+                @ondragleave="OnDragLeaveNode"
+                @ondrop:preventDefault="true"
+                @ondrop="() => OnDropOnNode.InvokeAsync(item)">
+                <div class="cms-treeview-node @BuildNodeClasses(item.Id, isSelected)">
+                    @if (hasChildren)
+                    {
+                        <button type="button" class="cms-treeview-toggle btn btn-sm btn-link p-0"
+                                title="@(isExpanded ? "Collapse" : "Expand")"
+                                aria-expanded="@isExpanded"
+                                @onclick="() => OnToggleExpand.InvokeAsync(item.Id)">
+                            <span class="oi @(isExpanded ? "oi-chevron-bottom" : "oi-chevron-right")"></span>
+                        </button>
+                    }
+                    else
+                    {
+                        <span class="cms-treeview-spacer"></span>
+                    }
+
+                    <button type="button" class="cms-treeview-label" @onclick="() => OnSelectNode.InvokeAsync(item.Id)">
+                        <span class="oi @(hasChildren ? "oi-folder" : "oi-file") cms-treeview-icon"></span>
+                        <span class="cms-treeview-name">@item.Name</span>
+                        <span class="cms-treeview-path">@item.FullPath</span>
+                    </button>
+
+                    <span class="cms-treeview-status cms-treeview-status-@item.Status.ToString().ToLowerInvariant()"
+                          title="@item.Status"></span>
+
+                    @if (CanReorder)
+                    {
+                        <TreeReorderControls
+                            CanMoveUp="moveAvailability.CanMoveUp"
+                            CanMoveDown="moveAvailability.CanMoveDown"
+                            Disabled="@(ReorderBusy || BusyId.HasValue)"
+                            OnMoveUp="@(() => OnMoveUp.InvokeAsync(item))"
+                            OnMoveDown="@(() => OnMoveDown.InvokeAsync(item))"
+                            OnDragStart="@(() => OnDragStart.InvokeAsync(item.Id))"
+                            OnDragEnd="OnDragEnd" />
+                    }
+                </div>
+
+                @if (hasChildren && isExpanded)
+                {
+                    <ContentTreeBranch ParentId="@item.Id"
+                                       Roots="@Roots"
+                                       ChildrenByParent="@ChildrenByParent"
+                                       ExpandedIds="@ExpandedIds"
+                                       SelectedId="@SelectedId"
+                                       Search="@Search"
+                                       CanReorder="@CanReorder"
+                                       ReorderBusy="@ReorderBusy"
+                                       BusyId="@BusyId"
+                                       DraggedId="@DraggedId"
+                                       DragOverId="@DragOverId"
+                                       OnToggleExpand="@OnToggleExpand"
+                                       OnSelectNode="@OnSelectNode"
+                                       OnMoveUp="@OnMoveUp"
+                                       OnMoveDown="@OnMoveDown"
+                                       OnDragStart="@OnDragStart"
+                                       OnDragEnd="@OnDragEnd"
+                                       OnDropOnNode="@OnDropOnNode"
+                                       OnDragOverNode="@OnDragOverNode"
+                                       OnDragLeaveNode="@OnDragLeaveNode" />
+                }
+            </li>
+        }
+    }
+</ul>
+
+@code {
+    [Parameter] public Guid? ParentId { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ContentDto> Roots { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyDictionary<Guid, List<ContentDto>> ChildrenByParent { get; set; } = new Dictionary<Guid, List<ContentDto>>();
+    [Parameter, EditorRequired] public ISet<Guid> ExpandedIds { get; set; } = new HashSet<Guid>();
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public string? Search { get; set; }
+    [Parameter] public bool CanReorder { get; set; }
+    [Parameter] public bool ReorderBusy { get; set; }
+    [Parameter] public Guid? BusyId { get; set; }
+    [Parameter] public Guid? DraggedId { get; set; }
+    [Parameter] public Guid? DragOverId { get; set; }
+    [Parameter, EditorRequired] public EventCallback<Guid> OnToggleExpand { get; set; }
+    [Parameter, EditorRequired] public EventCallback<Guid> OnSelectNode { get; set; }
+    [Parameter, EditorRequired] public EventCallback<ContentDto> OnMoveUp { get; set; }
+    [Parameter, EditorRequired] public EventCallback<ContentDto> OnMoveDown { get; set; }
+    [Parameter, EditorRequired] public EventCallback<Guid> OnDragStart { get; set; }
+    [Parameter] public EventCallback OnDragEnd { get; set; }
+    [Parameter, EditorRequired] public EventCallback<ContentDto> OnDropOnNode { get; set; }
+    [Parameter, EditorRequired] public EventCallback<Guid> OnDragOverNode { get; set; }
+    [Parameter] public EventCallback OnDragLeaveNode { get; set; }
+
+    private IReadOnlyList<ContentDto> GetItems() =>
+        ParentId is null
+            ? Roots.OrderBy(r => r.SortOrder).ThenBy(r => r.Name).ToList()
+            : ChildrenByParent.TryGetValue(ParentId.Value, out var children)
+                ? children.OrderBy(c => c.SortOrder).ThenBy(c => c.Name).ToList()
+                : [];
+
+    private static string GetItemClass(ContentDto item) =>
+        item.ParentId is null
+            ? "cms-treeview-item cms-treeview-item-root"
+            : "cms-treeview-item cms-treeview-item-child";
+
+    private bool ShouldRender(ContentDto item) =>
+        string.IsNullOrWhiteSpace(Search) ||
+        ContentTreeHelper.IsVisibleInTree(item, ChildrenByParent, Search);
+
+    private (bool CanMoveUp, bool CanMoveDown) GetMoveAvailability(ContentDto item)
+    {
+        var siblings = TreeReorderHelper.GetSiblings(
+            item,
+            Roots,
+            ChildrenByParent,
+            c => c.ParentId,
+            c => c.SortOrder,
+            c => c.Name);
+
+        return TreeReorderHelper.GetMoveAvailability(siblings, item.Id, c => c.Id);
+    }
+
+    private string? BuildNodeClasses(Guid id, bool isSelected)
+    {
+        var classes = new List<string>();
+        if (isSelected)
+        {
+            classes.Add("is-selected");
+        }
+
+        if (DraggedId == id)
+        {
+            classes.Add("is-dragging");
+        }
+
+        if (DragOverId == id)
+        {
+            classes.Add("is-drag-over");
+        }
+
+        return classes.Count == 0 ? null : string.Join(' ', classes);
+    }
+}

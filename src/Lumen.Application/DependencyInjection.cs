@@ -1,6 +1,7 @@
 using Lumen.Application.Categories;
 using Lumen.Application.Content;
 using Lumen.Application.Customers;
+using Lumen.Application.Orders;
 using Lumen.Application.Products;
 using Lumen.Application.Templates;
 using Lumen.Application.Templates.Management;
@@ -20,6 +21,7 @@ public static class DependencyInjection
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IOrderService, OrderService>();
         services.AddScoped<ITemplateManagementService, TemplateManagementService>();
 
         return services;

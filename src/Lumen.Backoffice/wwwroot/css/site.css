@@ -169,13 +169,46 @@ a, .btn-link {
 }
 
 .cms-treeview-children {
-    margin-left: 1.25rem;
-    padding-left: 0.75rem;
-    border-left: 1px solid #dee2e6;
+    margin: 0.15rem 0 0.35rem 1.5rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid #ced4da;
 }
 
 .cms-treeview-item {
     margin: 0;
+}
+
+.cms-treeview-item-root + .cms-treeview-item-root {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.cms-treeview-item-root > .cms-treeview-node .cms-treeview-name {
+    font-weight: 600;
+}
+
+.cms-treeview-item-child > .cms-treeview-node .cms-treeview-name {
+    font-weight: 400;
+}
+
+.cms-treeview-name {
+    flex-shrink: 0;
+}
+
+.cms-treeview-path {
+    margin-left: auto;
+    padding-left: 0.5rem;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.72rem;
+    color: #6c757d;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cms-treeview-item-root > .cms-treeview-node .cms-treeview-path {
+    color: #495057;
 }
 
 .cms-treeview-node {
@@ -243,6 +276,37 @@ a, .btn-link {
 
 .cms-treeview-status-archived {
     background: #6c757d;
+}
+
+.cms-treeview-reorder {
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+}
+
+.cms-treeview-node:hover .cms-treeview-reorder,
+.cms-treeview-node.is-selected .cms-treeview-reorder,
+.cms-treeview-node.is-drag-over .cms-treeview-reorder {
+    opacity: 1;
+}
+
+.cms-treeview-drag {
+    cursor: grab;
+    user-select: none;
+    line-height: 1;
+}
+
+.cms-treeview-drag:active {
+    cursor: grabbing;
+}
+
+.cms-treeview-node.is-dragging {
+    opacity: 0.45;
+}
+
+.cms-treeview-node.is-drag-over {
+    background: #fff3cd;
+    border-color: #ffe69c;
 }
 
 .content-preview-panel {

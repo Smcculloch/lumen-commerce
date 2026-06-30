@@ -1,5 +1,6 @@
 using Lumen.Application.Products.Dtos;
 using Lumen.Domain.Enums;
+using Lumen.Shared.Extensions;
 
 namespace Lumen.Storefront.Models;
 
@@ -20,8 +21,6 @@ public sealed class ProductDetailViewModel
     {
         product.Properties.TryGetValue("shortDescription", out var shortDesc);
         product.Properties.TryGetValue("description", out var desc);
-        product.Properties.TryGetValue("price", out var priceRaw);
-        product.Properties.TryGetValue("compareAtPrice", out var compareRaw);
 
         return new ProductDetailViewModel
         {
@@ -32,26 +31,14 @@ public sealed class ProductDetailViewModel
             Status = product.Status,
             ShortDescription = shortDesc?.ToString(),
             Description = desc?.ToString(),
-            Price = TryParseDecimal(priceRaw),
-            CompareAtPrice = TryParseDecimal(compareRaw),
+            Price = product.Properties.GetDecimal("price"),
+            CompareAtPrice = product.Properties.GetDecimal("compareAtPrice"),
             Variants = product.Variants
                 .Where(v => v.Status == ProductStatus.Published)
                 .Select(ProductVariantViewModel.From)
                 .ToList()
         };
     }
-
-    private static decimal? TryParseDecimal(object? value) =>
-        value switch
-        {
-            decimal d => d,
-            double dbl => (decimal)dbl,
-            float f => (decimal)f,
-            int i => i,
-            long l => l,
-            string s when decimal.TryParse(s, out var parsed) => parsed,
-            _ => null
-        };
 }
 
 public sealed class ProductVariantViewModel

@@ -3,6 +3,7 @@ using Lumen.Application.Cart;
 using Lumen.Application.Categories;
 using Lumen.Application.Content;
 using Lumen.Application.Customers;
+using Lumen.Application.Orders;
 using Lumen.Application.Media;
 using Lumen.Application.Products;
 using Lumen.Application.Templates;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<ITemplateRepository, TemplateRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<IOrderRepository, OrderRepository>();
 
         return services;
     }

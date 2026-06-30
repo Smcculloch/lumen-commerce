@@ -77,6 +77,12 @@ public sealed class Category
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    public void SetSortOrder(int sortOrder)
+    {
+        SortOrder = sortOrder;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     public void SetHierarchy(Guid? parentId, int level, string materializedPath, string fullPath)
     {
         ParentId = parentId;

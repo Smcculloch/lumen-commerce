@@ -1,0 +1,67 @@
+@model Lumen.Storefront.Models.OrderConfirmationViewModel
+@{
+    ViewData["Title"] = $"Order {Model.OrderNumber}";
+}
+
+<div class="text-center mb-4">
+    <div class="display-6 text-success mb-2">✓</div>
+    <h1 class="h2">Thank you for your order!</h1>
+    <p class="lead text-muted mb-0">
+        Order <strong>@Model.OrderNumber</strong> has been placed successfully.
+    </p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">Order summary</div>
+            <div class="card-body">
+                <dl class="row mb-4">
+                    <dt class="col-sm-4">Order number</dt>
+                    <dd class="col-sm-8"><code>@Model.OrderNumber</code></dd>
+
+                    <dt class="col-sm-4">Customer</dt>
+                    <dd class="col-sm-8">@Model.CustomerName</dd>
+
+                    <dt class="col-sm-4">Email</dt>
+                    <dd class="col-sm-8">@Model.Email</dd>
+                </dl>
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>SKU</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Items)
+                            {
+                                <tr>
+                                    <td>@item.ProductName</td>
+                                    <td><code class="small">@item.Sku</code></td>
+                                    <td class="text-end">@item.Quantity</td>
+                                    <td class="text-end">@item.LineTotal.ToString("C")</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="3" class="text-end">Subtotal</th>
+                                <th class="text-end">@Model.Subtotal.ToString("C")</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 justify-content-center">
+            <a class="btn btn-primary" href="/shop">Continue shopping</a>
+            <a class="btn btn-outline-secondary" href="/home">Back to home</a>
+        </div>
+    </div>
+</div>
