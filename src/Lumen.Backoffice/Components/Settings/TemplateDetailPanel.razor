@@ -1,0 +1,350 @@
+@using Lumen.Application.Templates.Management
+@using Lumen.Application.Templates.Management.Dtos
+@using Lumen.Backoffice.Components.Content
+@using Lumen.Domain.Enums
+@inject ITemplateManagementService TemplateManagement
+
+@if (_loading)
+{
+    <p><em>Loading template...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_detail is not null)
+{
+    <AlertBanner Message="@_bannerMessage" IsError="@_bannerIsError" OnDismiss="ClearBanner" />
+
+    @if (_detail.IsInUse)
+    {
+        <div class="alert alert-warning">
+            This template is used by <strong>@_detail.UsageCount</strong>
+            @(AreaLabel) item(s). Changes to properties may affect existing content.
+        </div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <strong>@_detail.DisplayName</strong>
+                <code class="ms-2 small">@_detail.Key</code>
+                <span class="ms-2"><TemplateSourceBadge Source="_detail.Source" /></span>
+            </div>
+            <div class="text-muted small">@_detail.Properties.Count properties · @_detail.UsageCount in use</div>
+        </div>
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(_detail.Description))
+            {
+                <p class="text-muted mb-3">@_detail.Description</p>
+            }
+
+            @if (_detail.CanEditMetadata)
+            {
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Display name</label>
+                        <input class="form-control" @bind="_metadataForm.DisplayName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Description</label>
+                        <input class="form-control" @bind="_metadataForm.Description" />
+                    </div>
+                    <div class="col-12">
+                        <button class="btn btn-sm btn-outline-primary" disabled="@_saving" @onclick="SaveMetadataAsync">
+                            Save template details
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Properties</strong>
+            <button class="btn btn-sm btn-primary" @onclick="ShowAddProperty">Add property</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Display name</th>
+                            <th>Type</th>
+                            <th>Required</th>
+                            <th>Sort</th>
+                            <th>Source</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var property in _detail.Properties)
+                        {
+                            <tr>
+                                <td><code class="small">@property.Name</code></td>
+                                <td>@property.DisplayName</td>
+                                <td>@property.Type</td>
+                                <td>@(property.IsRequired ? "Yes" : "No")</td>
+                                <td>
+                                    @if (property.CanEdit && property.PersistedId is Guid id)
+                                    {
+                                        <input type="number" class="form-control form-control-sm" style="width:5rem"
+                                               value="@property.SortOrder"
+                                               @onchange="e => ReorderPropertyAsync(id, e)" />
+                                    }
+                                    else
+                                    {
+                                        @property.SortOrder
+                                    }
+                                </td>
+                                <td><span class="badge bg-light text-dark">@property.Source</span></td>
+                                <td class="text-end">
+                                    @if (property.CanEdit && property.PersistedId is Guid propertyId)
+                                    {
+                                        <button class="btn btn-sm btn-outline-secondary me-1"
+                                                @onclick="() => EditProperty(property)">Edit</button>
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => ConfirmDeleteProperty(property)">Delete</button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">Read-only</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_propertyEditorVisible)
+{
+    <PropertyDefinitionEditor Model="_propertyEditor"
+                              IsEdit="_editingPropertyId.HasValue"
+                              OnCancel="HidePropertyEditor"
+                              OnSaveRequested="SavePropertyAsync" />
+}
+
+@if (_deletePropertyCandidate is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete property</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDeleteProperty"></button>
+                </div>
+                <div class="modal-body">
+                    Delete property <strong>@_deletePropertyCandidate.DisplayName</strong>
+                    (<code>@_deletePropertyCandidate.Name</code>)?
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CancelDeleteProperty">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeletePropertyConfirmedAsync">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string TemplateKey { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public string AreaLabel { get; set; } = "content";
+
+    [Parameter, EditorRequired]
+    public string ListUrl { get; set; } = "settings/templates/content";
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private TemplateDetailDto? _detail;
+    private MetadataForm _metadataForm = new();
+    private bool _propertyEditorVisible;
+    private Guid? _editingPropertyId;
+    private PropertyDefinitionEditor.PropertyEditorModel _propertyEditor = new();
+    private TemplatePropertyDetailDto? _deletePropertyCandidate;
+
+    private string? _loadedKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.Equals(_loadedKey, TemplateKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await LoadAsync();
+        _loadedKey = TemplateKey;
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _detail = await TemplateManagement.GetDetailAsync(TemplateKey);
+            _metadataForm = new MetadataForm
+            {
+                DisplayName = _detail.DisplayName,
+                Description = _detail.Description ?? string.Empty
+            };
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveMetadataAsync()
+    {
+        if (_detail is null || !_detail.CanEditMetadata)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            _detail = await TemplateManagement.UpdateDynamicTemplateAsync(
+                TemplateKey,
+                new UpdateDynamicTemplateRequest(
+                    _metadataForm.DisplayName,
+                    string.IsNullOrWhiteSpace(_metadataForm.Description) ? null : _metadataForm.Description));
+
+            _bannerMessage = "Template details saved.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ShowAddProperty()
+    {
+        _editingPropertyId = null;
+        _propertyEditor = new PropertyDefinitionEditor.PropertyEditorModel
+        {
+            SortOrder = (_detail?.Properties.Count ?? 0) * 10 + 10
+        };
+        _propertyEditorVisible = true;
+    }
+
+    private void EditProperty(TemplatePropertyDetailDto property)
+    {
+        _editingPropertyId = property.PersistedId;
+        _propertyEditor = PropertyDefinitionEditor.PropertyEditorModel.FromDetail(property);
+        _propertyEditorVisible = true;
+    }
+
+    private void HidePropertyEditor() => _propertyEditorVisible = false;
+
+    private async Task SavePropertyAsync(PropertyDefinitionEditor.PropertyEditorModel model)
+    {
+        try
+        {
+            if (_editingPropertyId is Guid propertyId)
+            {
+                _detail = await TemplateManagement.UpdatePropertyAsync(
+                    TemplateKey,
+                    propertyId,
+                    model.ToUpdateRequest());
+            }
+            else
+            {
+                _detail = await TemplateManagement.AddPropertyAsync(
+                    TemplateKey,
+                    model.ToCreateRequest());
+            }
+
+            _propertyEditorVisible = false;
+            _bannerMessage = "Property saved.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+    }
+
+    private void ConfirmDeleteProperty(TemplatePropertyDetailDto property) =>
+        _deletePropertyCandidate = property;
+
+    private void CancelDeleteProperty() => _deletePropertyCandidate = null;
+
+    private async Task DeletePropertyConfirmedAsync()
+    {
+        if (_deletePropertyCandidate?.PersistedId is not Guid propertyId)
+        {
+            return;
+        }
+
+        _deletePropertyCandidate = null;
+
+        try
+        {
+            _detail = await TemplateManagement.DeletePropertyAsync(TemplateKey, propertyId);
+            _bannerMessage = "Property deleted.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+    }
+
+    private async Task ReorderPropertyAsync(Guid propertyId, ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var sortOrder))
+        {
+            return;
+        }
+
+        try
+        {
+            _detail = await TemplateManagement.ReorderPropertiesAsync(
+                TemplateKey,
+                [new PropertySortOrderUpdate(propertyId, sortOrder)]);
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+    }
+
+    private void ClearBanner()
+    {
+        _bannerMessage = null;
+        _bannerIsError = false;
+    }
+
+    private sealed class MetadataForm
+    {
+        public string DisplayName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+}

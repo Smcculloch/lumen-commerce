@@ -1,0 +1,112 @@
+@page "/settings/templates/content"
+@using Lumen.Application.Templates.Management
+@using Lumen.Application.Templates.Management.Dtos
+@using Lumen.Backoffice.Components.Content
+@using Lumen.Backoffice.Components.Settings
+@inject ITemplateManagementService TemplateManagement
+
+<PageTitle>Content Templates</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="settings">Settings</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Content Templates</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="mb-0">Content Templates</h1>
+        <p class="text-muted mb-0">Templates used when creating and editing CMS pages.</p>
+    </div>
+    <a class="btn btn-primary" href="settings/templates/content/new">Create dynamic template</a>
+</div>
+
+<AlertBanner Message="@_bannerMessage" IsError="@_bannerIsError" OnDismiss="ClearBanner" />
+
+@if (_loading)
+{
+    <p><em>Loading templates...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Source</th>
+                    <th>Properties</th>
+                    <th>In use</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var template in _templates)
+                {
+                    <tr>
+                        <td class="fw-semibold">@template.DisplayName</td>
+                        <td><code class="small">@template.Key</code></td>
+                        <td><TemplateSourceBadge Source="template.Source" /></td>
+                        <td>@template.PropertyCount</td>
+                        <td>@template.UsageCount</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" href="settings/templates/content/@template.Key">Manage</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private IReadOnlyList<TemplateListItemDto> _templates = [];
+
+    [SupplyParameterFromQuery]
+    public string? Saved { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Saved == "1")
+        {
+            _bannerMessage = "Template created successfully.";
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _templates = await TemplateManagement.ListAsync(Domain.Enums.TemplateKind.Content);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ClearBanner()
+    {
+        _bannerMessage = null;
+        _bannerIsError = false;
+    }
+}

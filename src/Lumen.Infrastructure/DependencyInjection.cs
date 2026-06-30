@@ -1,0 +1,53 @@
+using Lumen.Application;
+using Lumen.Application.Cart;
+using Lumen.Application.Categories;
+using Lumen.Application.Content;
+using Lumen.Application.Customers;
+using Lumen.Application.Media;
+using Lumen.Application.Products;
+using Lumen.Application.Templates;
+using Lumen.Application.Templates.Management;
+using Lumen.Infrastructure.Persistence;
+using Lumen.Infrastructure.Persistence.Seed;
+using Lumen.Infrastructure.Repositories;
+using Lumen.Infrastructure.Templates;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace Lumen.Infrastructure;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddLumenInfrastructure(
+        this IServiceCollection services,
+        string connectionString = "Data Source=lumencommerce.db")
+    {
+        services.AddLumenApplication();
+
+        services.AddDbContext<AppDbContext>(options =>
+            options.UseSqlite(connectionString));
+
+        services.AddScoped<ITemplateRegistry, TemplateRegistry>();
+        services.AddScoped<IContentRepository, ContentRepository>();
+        services.AddScoped<IMediaRepository, MediaRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<ITemplateRepository, TemplateRepository>();
+        services.AddScoped<ICustomerRepository, CustomerRepository>();
+        services.AddScoped<ICartRepository, CartRepository>();
+
+        return services;
+    }
+
+    public static async Task InitializeLumenDatabaseAsync(this IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var environment = scope.ServiceProvider.GetService<IHostEnvironment>();
+        await DatabaseInitializer.MigrateAsync(dbContext, environment);
+        await TemplateSeedData.SeedAsync(dbContext);
+        await ContentSeedData.SeedAsync(dbContext);
+        await PimSeedData.SeedAsync(dbContext);
+    }
+}

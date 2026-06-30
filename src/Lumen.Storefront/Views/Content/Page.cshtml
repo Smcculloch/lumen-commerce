@@ -1,0 +1,18 @@
+@model Lumen.Storefront.Models.ContentPageViewModel
+
+<article>
+    <header class="mb-4">
+        <h1 class="display-5">@Model.Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Model.Introduction))
+        {
+            <p class="lead text-muted">@Model.Introduction</p>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Body))
+    {
+        <div class="cms-body">
+            @Html.Raw(Model.Body)
+        </div>
+    }
+</article>

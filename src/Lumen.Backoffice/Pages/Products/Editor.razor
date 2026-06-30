@@ -1,0 +1,590 @@
+@page "/products/new"
+@page "/products/edit/{Id:guid}"
+@using Lumen.Application.Categories
+@using Lumen.Application.Categories.Dtos
+@using Lumen.Application.Products
+@using Lumen.Application.Products.Dtos
+@using Lumen.Application.Templates
+@using Lumen.Backoffice.Components.Content
+@using Lumen.Backoffice.Components.Products
+@using Lumen.Domain.Enums
+@using Lumen.Domain.Exceptions
+@using Lumen.Domain.Templates
+@inject IProductService ProductService
+@inject ICategoryService CategoryService
+@inject ITemplateRegistry TemplateRegistry
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="products">Products</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@BreadcrumbText</li>
+    </ol>
+</nav>
+
+<h1>@PageTitleText</h1>
+
+@if (_loading)
+{
+    <p><em>Loading editor...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+    <a class="btn btn-secondary" href="products">Back to products</a>
+}
+else if (IsCreate && string.IsNullOrWhiteSpace(Template) && _templates.Count > 0)
+{
+    <div class="card">
+        <div class="card-header">Choose a product template</div>
+        <div class="list-group list-group-flush">
+            @foreach (var template in _templates)
+            {
+                <a class="list-group-item list-group-item-action" href="@BuildNewUrl(template.Key)">
+                    <div class="fw-semibold">@template.DisplayName</div>
+                    <div class="text-muted small">@template.Key</div>
+                    @if (!string.IsNullOrWhiteSpace(template.Description))
+                    {
+                        <div class="small mt-1">@template.Description</div>
+                    }
+                </a>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <AlertBanner Message="@_bannerMessage" IsError="@_bannerIsError" OnDismiss="ClearBanner" />
+
+    @if (_resolvedTemplate is not null)
+    {
+        <div class="text-muted mb-3">
+            Template: <strong>@_resolvedTemplate.DisplayName</strong>
+            <span class="ms-2">(@_resolvedTemplate.Key)</span>
+        </div>
+    }
+
+    <EditForm Model="_form" OnValidSubmit="SaveAsync">
+        <div class="card mb-3">
+            <div class="card-header">Product details</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="product-name">Name <span class="text-danger">*</span></label>
+                        <InputText id="product-name" class="form-control" @bind-Value="_form.Name" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="product-sku">SKU <span class="text-danger">*</span></label>
+                        <InputText id="product-sku" class="form-control" @bind-Value="_form.Sku" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="product-category">Category</label>
+                        <select id="product-category" class="form-select" @bind="_selectedCategoryId">
+                            <option value="">— No category —</option>
+                            @foreach (var option in _categoryOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="product-sort">Sort order</label>
+                        <InputNumber id="product-sort" class="form-control" @bind-Value="_form.SortOrder" />
+                    </div>
+                    @if (IsEdit)
+                    {
+                        <div class="col-md-3">
+                            <label class="form-label">Status</label>
+                            <div><ProductStatusBadge Status="_existing!.Status" /></div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <TemplatePropertyForm Template="_resolvedTemplate"
+                              PropertyValues="_propertyValues"
+                              ValidationErrors="_validationErrors" />
+
+        @if (IsEdit)
+        {
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Variants</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowAddVariant">Add variant</button>
+                </div>
+                <div class="card-body p-0">
+                    @if (_variants.Count == 0)
+                    {
+                        <div class="p-3 text-muted">No variants yet.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>SKU</th>
+                                        <th>Sort</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var variant in _variants)
+                                    {
+                                        <tr>
+                                            <td>@variant.Name</td>
+                                            <td><code class="small">@variant.Sku</code></td>
+                                            <td>@variant.SortOrder</td>
+                                            <td class="text-end">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary me-1"
+                                                        @onclick="() => EditVariant(variant)">Edit</button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger"
+                                                        @onclick="() => DeleteVariantAsync(variant.Id)">Delete</button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @(_saving ? "Saving..." : "Save")
+            </button>
+            <button type="button" class="btn btn-success" disabled="@_saving" @onclick="SaveAndPublishAsync">
+                Save &amp; Publish
+            </button>
+            <a class="btn btn-outline-secondary" href="products">Cancel</a>
+        </div>
+    </EditForm>
+}
+
+@if (_variantFormVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingVariantId is null ? "Add variant" : "Edit variant")</h5>
+                    <button type="button" class="btn-close" @onclick="HideVariantForm"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input class="form-control" @bind="_variantForm.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">SKU</label>
+                        <input class="form-control" @bind="_variantForm.Sku" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sort order</label>
+                        <input type="number" class="form-control" @bind="_variantForm.SortOrder" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="HideVariantForm">Cancel</button>
+                    <button class="btn btn-primary" @onclick="SaveVariantAsync">Save variant</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid? CategoryId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Template { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+    private bool IsCreate => !IsEdit;
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private ProductDto? _existing;
+    private ResolvedTemplateDefinition? _resolvedTemplate;
+    private IReadOnlyList<ResolvedTemplateDefinition> _templates = [];
+    private IReadOnlyDictionary<string, string[]>? _validationErrors;
+    private List<CategoryOption> _categoryOptions = [];
+    private string _selectedCategoryId = string.Empty;
+    private IReadOnlyList<ProductVariantDto> _variants = [];
+
+    private bool _variantFormVisible;
+    private Guid? _editingVariantId;
+    private readonly VariantForm _variantForm = new();
+
+    private readonly EditorForm _form = new();
+    private readonly Dictionary<string, string> _propertyValues = new(StringComparer.OrdinalIgnoreCase);
+
+    private string PageTitleText => IsCreate ? "Create product" : $"Edit: {_form.Name}";
+    private string BreadcrumbText => IsCreate ? "Create" : "Edit";
+
+    private string? _loadedStateKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var stateKey = $"{Id}|{CategoryId}|{Template}";
+        if (string.Equals(stateKey, _loadedStateKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        _bannerMessage = null;
+        _validationErrors = null;
+
+        try
+        {
+            _templates = (await TemplateRegistry.GetAllAsync(TemplateKind.Product))
+                .OrderBy(t => t.DisplayName)
+                .ToList();
+
+            await LoadCategoryOptionsAsync();
+
+            if (CategoryId is Guid categoryId)
+            {
+                _selectedCategoryId = categoryId.ToString();
+            }
+
+            _resolvedTemplate = null;
+            _propertyValues.Clear();
+
+            if (IsEdit)
+            {
+                await LoadExistingAsync(Id!.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(Template))
+            {
+                await LoadCreateAsync();
+            }
+
+            _loadedStateKey = stateKey;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _loadedStateKey = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadCategoryOptionsAsync()
+    {
+        var roots = await CategoryService.GetRootsAsync();
+        var childrenByParent = new Dictionary<Guid, List<CategoryDto>>();
+        var queue = new Queue<CategoryDto>(roots);
+
+        while (queue.Count > 0)
+        {
+            var node = queue.Dequeue();
+            var children = (await CategoryService.GetChildrenAsync(node.Id)).ToList();
+            childrenByParent[node.Id] = children;
+            foreach (var child in children)
+            {
+                queue.Enqueue(child);
+            }
+        }
+
+        _categoryOptions = [];
+        foreach (var root in roots.OrderBy(r => r.SortOrder))
+        {
+            AddCategoryOption(root, childrenByParent, 0);
+        }
+    }
+
+    private void AddCategoryOption(CategoryDto category, Dictionary<Guid, List<CategoryDto>> childrenByParent, int level)
+    {
+        var indent = new string('—', level);
+        _categoryOptions.Add(new CategoryOption(category.Id, $"{indent} {category.Name} ({category.FullPath})".Trim()));
+
+        if (childrenByParent.TryGetValue(category.Id, out var children))
+        {
+            foreach (var child in children.OrderBy(c => c.SortOrder))
+            {
+                AddCategoryOption(child, childrenByParent, level + 1);
+            }
+        }
+    }
+
+    private async Task LoadExistingAsync(Guid id)
+    {
+        _existing = await ProductService.GetByIdAsync(id)
+            ?? throw new InvalidOperationException("Product not found.");
+
+        _form.Name = _existing.Name;
+        _form.Sku = _existing.Sku;
+        _form.SortOrder = _existing.SortOrder;
+        _selectedCategoryId = _existing.CategoryId?.ToString() ?? string.Empty;
+        _variants = _existing.Variants;
+        Template = _existing.TemplateKey;
+
+        _resolvedTemplate = await TemplateRegistry.GetByKeyAsync(_existing.TemplateKey)
+            ?? throw new InvalidOperationException($"Template '{_existing.TemplateKey}' not found.");
+
+        foreach (var property in _resolvedTemplate.Properties)
+        {
+            _existing.Properties.TryGetValue(property.Name, out var value);
+            _propertyValues[property.Name] = PropertyValueConverter.ToFormString(value, property.Type);
+        }
+    }
+
+    private async Task LoadCreateAsync()
+    {
+        _resolvedTemplate = await TemplateRegistry.GetByKeyAsync(Template!)
+            ?? throw new InvalidOperationException($"Template '{Template}' not found.");
+
+        foreach (var property in _resolvedTemplate.Properties)
+        {
+            _propertyValues[property.Name] = PropertyValueConverter.ToFormString(property.DefaultValue, property.Type);
+        }
+    }
+
+    private Guid? ResolveCategoryId()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedCategoryId))
+        {
+            return null;
+        }
+
+        return Guid.TryParse(_selectedCategoryId, out var id) ? id : CategoryId;
+    }
+
+    private async Task SaveAsync() => await SaveInternalAsync(publish: false);
+
+    private async Task SaveAndPublishAsync() => await SaveInternalAsync(publish: true);
+
+    private async Task SaveInternalAsync(bool publish)
+    {
+        _saving = true;
+        _bannerMessage = null;
+        _bannerIsError = false;
+        _validationErrors = null;
+
+        try
+        {
+            var properties = BuildProperties();
+            ProductDto saved;
+
+            if (IsEdit)
+            {
+                saved = await ProductService.UpdateAsync(
+                    Id!.Value,
+                    new UpdateProductRequest(
+                        _form.Sku,
+                        _form.Name,
+                        ResolveCategoryId(),
+                        _form.SortOrder,
+                        properties));
+            }
+            else
+            {
+                saved = await ProductService.CreateAsync(
+                    new CreateProductRequest(
+                        Template!,
+                        _form.Sku,
+                        _form.Name,
+                        ResolveCategoryId(),
+                        _form.SortOrder,
+                        properties));
+            }
+
+            if (publish)
+            {
+                saved = await ProductService.PublishAsync(saved.Id);
+                Navigation.NavigateTo("products?published=1", forceLoad: true);
+            }
+            else
+            {
+                Navigation.NavigateTo(IsEdit ? "products?saved=1" : $"products/edit/{saved.Id}?saved=1", forceLoad: true);
+            }
+        }
+        catch (TemplateValidationException ex)
+        {
+            _validationErrors = ex.Errors;
+            _bannerMessage = "Please fix the validation errors below.";
+            _bannerIsError = true;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Dictionary<string, object?> BuildProperties()
+    {
+        var properties = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        if (_resolvedTemplate is null)
+        {
+            return properties;
+        }
+
+        foreach (var property in _resolvedTemplate.Properties)
+        {
+            if (!_propertyValues.TryGetValue(property.Name, out var raw))
+            {
+                continue;
+            }
+
+            properties[property.Name] = PropertyValueConverter.FromFormString(raw, property.Type);
+        }
+
+        if (_resolvedTemplate.FindProperty("name") is not null)
+        {
+            properties["name"] = _form.Name;
+        }
+
+        if (_resolvedTemplate.FindProperty("sku") is not null)
+        {
+            properties["sku"] = _form.Sku;
+        }
+
+        return properties;
+    }
+
+    private void ShowAddVariant()
+    {
+        _editingVariantId = null;
+        _variantForm.Name = string.Empty;
+        _variantForm.Sku = string.Empty;
+        _variantForm.SortOrder = _variants.Count * 10;
+        _variantFormVisible = true;
+    }
+
+    private void EditVariant(ProductVariantDto variant)
+    {
+        _editingVariantId = variant.Id;
+        _variantForm.Name = variant.Name;
+        _variantForm.Sku = variant.Sku;
+        _variantForm.SortOrder = variant.SortOrder;
+        _variantFormVisible = true;
+    }
+
+    private void HideVariantForm() => _variantFormVisible = false;
+
+    private async Task SaveVariantAsync()
+    {
+        if (Id is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_editingVariantId is Guid variantId)
+            {
+                await ProductService.UpdateVariantAsync(
+                    Id.Value,
+                    variantId,
+                    new UpdateVariantRequest(
+                        _variantForm.Sku,
+                        _variantForm.Name,
+                        _variantForm.SortOrder,
+                        new Dictionary<string, object?>()));
+            }
+            else
+            {
+                await ProductService.CreateVariantAsync(
+                    Id.Value,
+                    new CreateVariantRequest(
+                        _variantForm.Sku,
+                        _variantForm.Name,
+                        _variantForm.SortOrder,
+                        new Dictionary<string, object?>()));
+            }
+
+            _variants = await ProductService.GetVariantsAsync(Id.Value);
+            _variantFormVisible = false;
+            _bannerMessage = "Variant saved.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+    }
+
+    private async Task DeleteVariantAsync(Guid variantId)
+    {
+        if (Id is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await ProductService.DeleteVariantAsync(Id.Value, variantId);
+            _variants = await ProductService.GetVariantsAsync(Id.Value);
+            _bannerMessage = "Variant deleted.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+    }
+
+    private void ClearBanner()
+    {
+        _bannerMessage = null;
+        _bannerIsError = false;
+    }
+
+    private string BuildNewUrl(string templateKey)
+    {
+        var url = $"products/new?template={Uri.EscapeDataString(templateKey)}";
+        if (!string.IsNullOrWhiteSpace(_selectedCategoryId))
+        {
+            url += $"&categoryId={_selectedCategoryId}";
+        }
+        else if (CategoryId is Guid categoryId)
+        {
+            url += $"&categoryId={categoryId}";
+        }
+
+        return url;
+    }
+
+    private sealed record CategoryOption(Guid Id, string Label);
+
+    private sealed class EditorForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Sku { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+    }
+
+    private sealed class VariantForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Sku { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+    }
+}

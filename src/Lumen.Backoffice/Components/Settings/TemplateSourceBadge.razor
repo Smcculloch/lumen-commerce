@@ -1,0 +1,24 @@
+@using Lumen.Application.Templates.Management.Dtos
+
+<span class="badge @CssClass">@Label</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public TemplateSourceKind Source { get; set; }
+
+    private string Label => Source switch
+    {
+        TemplateSourceKind.Code => "Code",
+        TemplateSourceKind.Extended => "Code + Extensions",
+        TemplateSourceKind.Dynamic => "Dynamic",
+        _ => Source.ToString()
+    };
+
+    private string CssClass => Source switch
+    {
+        TemplateSourceKind.Code => "bg-secondary",
+        TemplateSourceKind.Extended => "bg-primary",
+        TemplateSourceKind.Dynamic => "bg-info text-dark",
+        _ => "bg-light text-dark"
+    };
+}

@@ -1,0 +1,8 @@
+@model IReadOnlyList<Lumen.Application.Content.Dtos.NavigationItemDto>
+
+@foreach (var item in Model)
+{
+    <li class="nav-item">
+        <a class="nav-link" href="@item.Url">@item.Label</a>
+    </li>
+}

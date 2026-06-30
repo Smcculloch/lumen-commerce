@@ -1,0 +1,112 @@
+@using Lumen.Application.Content.Dtos
+@using Lumen.Domain.Enums
+
+@if (Item is null)
+{
+    <div class="content-preview-empty">
+        <span class="oi oi-file text-muted"></span>
+        <p class="text-muted mb-0">Select a page in the tree to preview its content.</p>
+    </div>
+}
+else
+{
+    var title = ContentPreviewHelper.GetTitle(Item);
+    var introduction = ContentPreviewHelper.GetString(Item, "introduction");
+    var body = ContentPreviewHelper.GetString(Item, "body");
+    var extraProperties = ContentPreviewHelper.GetDisplayProperties(Item).ToList();
+
+    <div class="content-preview-panel">
+        <div class="content-preview-toolbar">
+            <div class="content-preview-toolbar-main">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <h2 class="h5 mb-0">@Item.Name</h2>
+                    <StatusBadge Status="Item.Status" />
+                </div>
+                <div class="content-preview-meta-line small text-muted">
+                    <code>@Item.FullPath</code>
+                    <span class="mx-1">·</span>
+                    @Item.TemplateKey
+                    <span class="mx-1">·</span>
+                    @Item.Slug
+                    <span class="mx-1">·</span>
+                    Updated @Item.UpdatedAt.LocalDateTime.ToString("g")
+                    @if (Item.PublishedAt is DateTimeOffset publishedAt)
+                    {
+                        <span class="mx-1">·</span>
+                        <span>Published @publishedAt.LocalDateTime.ToString("g")</span>
+                    }
+                </div>
+            </div>
+            <div class="btn-group btn-group-sm flex-wrap content-preview-actions">
+                <a class="btn btn-outline-primary" href="content/edit/@Item.Id">Edit</a>
+                <a class="btn btn-outline-secondary" href="content/new?parentId=@Item.Id">Add child</a>
+                @if (Item.Status == ContentStatus.Published)
+                {
+                    <button class="btn btn-outline-warning" disabled="@IsBusy"
+                            @onclick="() => OnUnpublish.InvokeAsync(Item.Id)">Unpublish</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline-success" disabled="@IsBusy"
+                            @onclick="() => OnPublish.InvokeAsync(Item.Id)">Publish</button>
+                }
+                <button class="btn btn-outline-danger" disabled="@IsBusy"
+                        @onclick="() => OnDelete.InvokeAsync(Item)">Delete</button>
+            </div>
+        </div>
+
+        <div class="content-preview-content">
+            @if (!string.Equals(title, Item.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                <h1 class="h4 mb-2">@title</h1>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(introduction))
+            {
+                <p class="text-muted mb-2">@introduction</p>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(body))
+            {
+                <div class="cms-preview-html">
+                    @((MarkupString)body)
+                </div>
+            }
+            else if (string.IsNullOrWhiteSpace(introduction))
+            {
+                <p class="text-muted mb-0 small">No rendered body content for this page.</p>
+            }
+        </div>
+
+        @if (extraProperties.Count > 0)
+        {
+            <details class="content-preview-properties">
+                <summary class="small text-muted">Template properties (@extraProperties.Count)</summary>
+                <dl class="row small mb-0 mt-2">
+                    @foreach (var (key, value) in extraProperties)
+                    {
+                        <dt class="col-sm-3 text-muted">@key</dt>
+                        <dd class="col-sm-9">@value</dd>
+                    }
+                </dl>
+            </details>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ContentDto? Item { get; set; }
+
+    [Parameter]
+    public bool IsBusy { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnPublish { get; set; }
+
+    [Parameter]
+    public EventCallback<Guid> OnUnpublish { get; set; }
+
+    [Parameter]
+    public EventCallback<ContentDto> OnDelete { get; set; }
+}

@@ -1,0 +1,389 @@
+@page "/products"
+@using Lumen.Application.Categories
+@using Lumen.Application.Categories.Dtos
+@using Lumen.Application.Products
+@using Lumen.Application.Products.Dtos
+@using Lumen.Backoffice.Components.Content
+@using Lumen.Backoffice.Components.Products
+@using Lumen.Domain.Enums
+@inject ICategoryService CategoryService
+@inject IProductService ProductService
+
+<PageTitle>Products</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="mb-0">Products</h1>
+        <p class="text-muted mb-0">Browse categories and manage your product catalog.</p>
+    </div>
+    <a class="btn btn-primary" href="products/new">Create Product</a>
+</div>
+
+<AlertBanner Message="@_bannerMessage" IsError="@_bannerIsError" OnDismiss="ClearBanner" />
+
+<div class="row g-2 mb-3 align-items-center">
+    <div class="col-md-4">
+        <input class="form-control" placeholder="Search products..."
+               @bind="_search" @bind:event="oninput" @bind:after="ReloadProductsAsync" />
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" @bind="_statusFilter" @bind:after="ReloadProductsAsync">
+            <option value="">All statuses</option>
+            <option value="@ProductStatus.Draft">Draft</option>
+            <option value="@ProductStatus.Published">Published</option>
+            <option value="@ProductStatus.Archived">Archived</option>
+        </select>
+    </div>
+    <div class="col-md-5">
+        <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ExpandAllAsync">Expand all</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="CollapseAll">Collapse all</button>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="ClearCategoryFilter">All categories</button>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading catalog...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_roots.Count == 0 && _products.Count == 0)
+{
+    <div class="alert alert-info">
+        No categories or products yet.
+        <a href="products/new">Create your first product</a>.
+    </div>
+}
+else
+{
+    <div class="content-explorer row g-3">
+        <div class="col-lg-4">
+            <div class="content-explorer-tree card">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <strong>Categories</strong>
+                    @if (_selectedCategoryId is Guid selected)
+                    {
+                        <span class="badge bg-primary">Filtered</span>
+                    }
+                </div>
+                <div class="card-body p-2">
+                    <ul class="cms-treeview" role="tree">
+                        <li class="cms-treeview-item" role="treeitem">
+                            <div class="cms-treeview-node @(_selectedCategoryId is null ? "is-selected" : null)">
+                                <span class="cms-treeview-spacer"></span>
+                                <button type="button" class="cms-treeview-label" @onclick="() => SelectCategoryAsync(null)">
+                                    <span class="oi oi-folder cms-treeview-icon"></span>
+                                    All products
+                                </button>
+                            </div>
+                        </li>
+                        @foreach (var item in VisibleCategories)
+                        {
+                            var hasChildren = _childrenByParent.ContainsKey(item.Id) && _childrenByParent[item.Id].Count > 0;
+                            var isExpanded = _expandedIds.Contains(item.Id);
+                            var isSelected = _selectedCategoryId == item.Id;
+
+                            <li class="cms-treeview-item" role="treeitem" style="padding-left: @(item.Level * 1.25)rem">
+                                <div class="cms-treeview-node @(isSelected ? "is-selected" : null)">
+                                    @if (hasChildren)
+                                    {
+                                        <button type="button" class="cms-treeview-toggle btn btn-sm btn-link p-0"
+                                                @onclick="() => ToggleExpand(item.Id)">
+                                            <span class="oi @(isExpanded ? "oi-chevron-bottom" : "oi-chevron-right")"></span>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="cms-treeview-spacer"></span>
+                                    }
+
+                                    <button type="button" class="cms-treeview-label" @onclick="() => SelectCategoryAsync(item.Id)">
+                                        <span class="oi @(hasChildren ? "oi-folder" : "oi-tag") cms-treeview-icon"></span>
+                                        @item.Name
+                                    </button>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header py-2">
+                    <strong>Products</strong>
+                    @if (_selectedCategoryId is Guid catId && _categoryById.TryGetValue(catId, out var cat))
+                    {
+                        <span class="text-muted ms-2">in <em>@cat.Name</em></span>
+                    }
+                </div>
+                <div class="card-body p-0">
+                    @if (_products.Count == 0)
+                    {
+                        <div class="p-3 text-muted">No products match the current filters.</div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>SKU</th>
+                                        <th>Template</th>
+                                        <th>Status</th>
+                                        <th>Variants</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var product in _products)
+                                    {
+                                        <tr>
+                                            <td class="fw-semibold">@product.Name</td>
+                                            <td><code class="small">@product.Sku</code></td>
+                                            <td>@product.TemplateKey</td>
+                                            <td><ProductStatusBadge Status="product.Status" /></td>
+                                            <td>@product.Variants.Count</td>
+                                            <td class="text-end">
+                                                <div class="btn-group btn-group-sm">
+                                                    <a class="btn btn-outline-primary" href="products/edit/@product.Id">Edit</a>
+                                                    @if (product.Status == ProductStatus.Published)
+                                                    {
+                                                        <button class="btn btn-outline-warning" disabled="@_busyId.HasValue"
+                                                                @onclick="() => UnpublishAsync(product.Id)">Unpublish</button>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button class="btn btn-outline-success" disabled="@_busyId.HasValue"
+                                                                @onclick="() => PublishAsync(product.Id)">Publish</button>
+                                                    }
+                                                    <button class="btn btn-outline-danger" disabled="@_busyId.HasValue"
+                                                            @onclick="() => ConfirmDelete(product)">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteCandidate is not null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete product</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    Delete <strong>@_deleteCandidate.Name</strong> (<code>@_deleteCandidate.Sku</code>)?
+                    <div class="mt-2 text-muted small">All variants will also be removed.</div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CancelDelete">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteConfirmedAsync">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private Guid? _busyId;
+    private Guid? _selectedCategoryId;
+    private ProductDto? _deleteCandidate;
+
+    private IReadOnlyList<CategoryDto> _roots = [];
+    private Dictionary<Guid, List<CategoryDto>> _childrenByParent = new();
+    private Dictionary<Guid, CategoryDto> _categoryById = new();
+    private IReadOnlyList<ProductDto> _products = [];
+    private readonly HashSet<Guid> _expandedIds = [];
+
+    [SupplyParameterFromQuery]
+    public string? Saved { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Published { get; set; }
+
+    private IEnumerable<CategoryDto> VisibleCategories =>
+        CategoryTreeHelper.FlattenVisible(_roots, _childrenByParent, _expandedIds, search: null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Saved == "1")
+        {
+            _bannerMessage = "Product saved successfully.";
+        }
+        else if (Published == "1")
+        {
+            _bannerMessage = "Product saved and published.";
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _roots = await CategoryService.GetRootsAsync();
+            _childrenByParent = await CategoryTreeHelper.LoadChildrenLookupAsync(
+                _roots,
+                parentId => CategoryService.GetChildrenAsync(parentId));
+
+            _categoryById = CategoryTreeHelper.FlattenAll(_roots, _childrenByParent)
+                .ToDictionary(c => c.Id);
+
+            foreach (var root in _roots)
+            {
+                _expandedIds.Add(root.Id);
+            }
+
+            await ReloadProductsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ReloadProductsAsync()
+    {
+        ProductStatus? status = string.IsNullOrWhiteSpace(_statusFilter)
+            ? null
+            : Enum.Parse<ProductStatus>(_statusFilter);
+
+        _products = await ProductService.ListAsync(_selectedCategoryId, status, _search);
+    }
+
+    private async Task SelectCategoryAsync(Guid? categoryId)
+    {
+        _selectedCategoryId = categoryId;
+        await ReloadProductsAsync();
+    }
+
+    private async Task ClearCategoryFilter()
+    {
+        _selectedCategoryId = null;
+        await ReloadProductsAsync();
+    }
+
+    private async Task ExpandAllAsync()
+    {
+        foreach (var id in CategoryTreeHelper.GetExpandableIds(_childrenByParent))
+        {
+            _expandedIds.Add(id);
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CollapseAll()
+    {
+        _expandedIds.Clear();
+        foreach (var root in _roots)
+        {
+            _expandedIds.Add(root.Id);
+        }
+    }
+
+    private void ToggleExpand(Guid id)
+    {
+        if (!_expandedIds.Remove(id))
+        {
+            _expandedIds.Add(id);
+        }
+    }
+
+    private async Task PublishAsync(Guid id)
+    {
+        await RunActionAsync(id, async () =>
+        {
+            await ProductService.PublishAsync(id);
+            _bannerMessage = "Product published.";
+            _bannerIsError = false;
+        });
+    }
+
+    private async Task UnpublishAsync(Guid id)
+    {
+        await RunActionAsync(id, async () =>
+        {
+            await ProductService.UnpublishAsync(id);
+            _bannerMessage = "Product unpublished.";
+            _bannerIsError = false;
+        });
+    }
+
+    private async Task RunActionAsync(Guid id, Func<Task> action)
+    {
+        _busyId = id;
+        try
+        {
+            await action();
+            await ReloadProductsAsync();
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _busyId = null;
+        }
+    }
+
+    private void ConfirmDelete(ProductDto product) => _deleteCandidate = product;
+
+    private void CancelDelete() => _deleteCandidate = null;
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteCandidate is null)
+        {
+            return;
+        }
+
+        var id = _deleteCandidate.Id;
+        _deleteCandidate = null;
+
+        await RunActionAsync(id, async () =>
+        {
+            await ProductService.DeleteAsync(id);
+            _bannerMessage = "Product deleted.";
+            _bannerIsError = false;
+        });
+    }
+
+    private void ClearBanner()
+    {
+        _bannerMessage = null;
+        _bannerIsError = false;
+    }
+}

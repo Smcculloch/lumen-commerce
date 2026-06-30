@@ -1,0 +1,33 @@
+@model Lumen.Storefront.Controllers.AccountController.RegisterViewModel
+@{
+    ViewData["Title"] = "Register";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+}
+
+<h1 class="mb-3">Create account</h1>
+
+<form method="post" action="/account/register">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="returnUrl" value="@returnUrl" />
+    <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+    <div class="mb-3">
+        <label class="form-label" asp-for="Email"></label>
+        <input class="form-control" asp-for="Email" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label" asp-for="DisplayName"></label>
+        <input class="form-control" asp-for="DisplayName" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label" asp-for="Password"></label>
+        <input class="form-control" asp-for="Password" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label" asp-for="ConfirmPassword"></label>
+        <input class="form-control" asp-for="ConfirmPassword" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Register</button>
+    <a class="btn btn-link" href="/account/login">Already have an account?</a>
+</form>

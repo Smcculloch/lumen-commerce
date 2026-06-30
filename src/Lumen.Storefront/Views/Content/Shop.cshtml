@@ -1,0 +1,23 @@
+@model Lumen.Storefront.Models.ShopPageViewModel
+
+<article>
+    <header class="mb-4">
+        <h1 class="display-5">@Model.Content.Title</h1>
+        @if (!string.IsNullOrWhiteSpace(Model.Content.Introduction))
+        {
+            <p class="lead text-muted">@Model.Content.Introduction</p>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Content.Body))
+    {
+        <div class="cms-body mb-5">
+            @Html.Raw(Model.Content.Body)
+        </div>
+    }
+
+    <section aria-labelledby="catalog-heading">
+        <h2 id="catalog-heading" class="h4 mb-3">Product catalog</h2>
+        <partial name="_ProductGrid" model="Model.Products" />
+    </section>
+</article>

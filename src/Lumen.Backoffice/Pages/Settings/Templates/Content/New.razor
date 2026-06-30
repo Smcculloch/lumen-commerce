@@ -1,0 +1,94 @@
+@page "/settings/templates/content/new"
+@using Lumen.Application.Templates.Management
+@using Lumen.Application.Templates.Management.Dtos
+@using Lumen.Backoffice.Components.Content
+@using Lumen.Domain.Enums
+@inject ITemplateManagementService TemplateManagement
+@inject NavigationManager Navigation
+
+<PageTitle>Create Content Template</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="settings">Settings</a></li>
+        <li class="breadcrumb-item"><a href="settings/templates/content">Content Templates</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Create</li>
+    </ol>
+</nav>
+
+<h1>Create dynamic content template</h1>
+<p class="text-muted">Dynamic templates exist entirely in the database and can be fully managed from the backoffice.</p>
+
+<AlertBanner Message="@_bannerMessage" IsError="@_bannerIsError" OnDismiss="ClearBanner" />
+
+<EditForm Model="_form" OnValidSubmit="CreateAsync">
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label" for="template-key">Template key</label>
+                <InputText id="template-key" class="form-control" @bind-Value="_form.Key" />
+                <div class="form-text">Lowercase identifier (e.g. landing-page-v2).</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="template-name">Display name</label>
+                <InputText id="template-name" class="form-control" @bind-Value="_form.DisplayName" />
+            </div>
+            <div class="mb-0">
+                <label class="form-label" for="template-desc">Description</label>
+                <InputText id="template-desc" class="form-control" @bind-Value="_form.Description" />
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary" disabled="@_saving">@(_saving ? "Creating..." : "Create template")</button>
+        <a class="btn btn-outline-secondary" href="settings/templates/content">Cancel</a>
+    </div>
+</EditForm>
+
+@code {
+    private bool _saving;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private readonly CreateForm _form = new();
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _bannerMessage = null;
+
+        try
+        {
+            var created = await TemplateManagement.CreateDynamicTemplateAsync(
+                new CreateDynamicTemplateRequest(
+                    _form.Key,
+                    _form.DisplayName,
+                    string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description,
+                    TemplateKind.Content));
+
+            Navigation.NavigateTo($"settings/templates/content/{created.Key}?saved=1", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ClearBanner()
+    {
+        _bannerMessage = null;
+        _bannerIsError = false;
+    }
+
+    private sealed class CreateForm
+    {
+        public string Key { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+}

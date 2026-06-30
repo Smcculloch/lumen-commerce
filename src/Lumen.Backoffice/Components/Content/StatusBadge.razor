@@ -1,0 +1,15 @@
+@using Lumen.Domain.Enums
+
+<span class="badge @CssClass">@Status</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContentStatus Status { get; set; }
+
+    private string CssClass => Status switch
+    {
+        ContentStatus.Published => "bg-success",
+        ContentStatus.Archived => "bg-secondary",
+        _ => "bg-warning text-dark"
+    };
+}

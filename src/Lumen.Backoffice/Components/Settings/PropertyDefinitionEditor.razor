@@ -1,0 +1,225 @@
+@using Lumen.Application.Templates.Management.Dtos
+@using Lumen.Domain.Enums
+
+<div class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,.5)">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">@(IsEdit ? "Edit property" : "Add property")</h5>
+                <button type="button" class="btn-close" @onclick="OnCancel"></button>
+            </div>
+            <div class="modal-body">
+                @if (!IsEdit)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Property name (key)</label>
+                        <input class="form-control" @bind="Model.Name" />
+                        <div class="form-text">Lowercase identifier used in stored data (e.g. heroSubtitle).</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Property name</label>
+                        <div><code>@Model.Name</code></div>
+                    </div>
+                }
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Display name</label>
+                        <input class="form-control" @bind="Model.DisplayName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Type</label>
+                        @if (IsEdit)
+                        {
+                            <div class="form-control-plaintext">@Model.Type</div>
+                        }
+                        else
+                        {
+                            <select class="form-select" @bind="Model.Type">
+                                @foreach (var type in PropertyTypes)
+                                {
+                                    <option value="@type">@type</option>
+                                }
+                            </select>
+                        }
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Description</label>
+                        <input class="form-control" @bind="Model.Description" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Sort order</label>
+                        <input type="number" class="form-control" @bind="Model.SortOrder" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Default value</label>
+                        <input class="form-control" @bind="Model.DefaultValue" />
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="prop-required" @bind="Model.IsRequired" />
+                            <label class="form-check-label" for="prop-required">Required</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Min length</label>
+                        <input type="number" class="form-control" @bind="Model.MinLength" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Max length</label>
+                        <input type="number" class="form-control" @bind="Model.MaxLength" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Min value</label>
+                        <input type="number" step="0.01" class="form-control" @bind="Model.MinValue" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Max value</label>
+                        <input type="number" step="0.01" class="form-control" @bind="Model.MaxValue" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Pattern (regex)</label>
+                        <input class="form-control" @bind="Model.Pattern" />
+                    </div>
+                    @if (Model.Type is PropertyType.Select or PropertyType.MultiSelect)
+                    {
+                        <div class="col-12">
+                            <label class="form-label">Options (value|label per line)</label>
+                            <textarea class="form-control" rows="4" @bind="Model.OptionsText"></textarea>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="OnCancel">Cancel</button>
+                <button class="btn btn-primary" @onclick="OnSave">Save property</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly PropertyType[] PropertyTypes =
+    [
+        PropertyType.Text,
+        PropertyType.RichText,
+        PropertyType.Html,
+        PropertyType.Number,
+        PropertyType.Integer,
+        PropertyType.Decimal,
+        PropertyType.Boolean,
+        PropertyType.DateTime,
+        PropertyType.Image,
+        PropertyType.Select,
+        PropertyType.MultiSelect,
+        PropertyType.Json
+    ];
+
+    [Parameter, EditorRequired]
+    public PropertyEditorModel Model { get; set; } = new();
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback OnCancel { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<PropertyEditorModel> OnSaveRequested { get; set; }
+
+    private Task OnSave() => OnSaveRequested.InvokeAsync(Model);
+
+    public sealed class PropertyEditorModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public PropertyType Type { get; set; } = PropertyType.Text;
+        public bool IsRequired { get; set; }
+        public int SortOrder { get; set; }
+        public string DefaultValue { get; set; } = string.Empty;
+        public int? MinLength { get; set; }
+        public int? MaxLength { get; set; }
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
+        public string Pattern { get; set; } = string.Empty;
+        public string OptionsText { get; set; } = string.Empty;
+
+        public static PropertyEditorModel FromDetail(TemplatePropertyDetailDto property) =>
+            new()
+            {
+                Name = property.Name,
+                DisplayName = property.DisplayName,
+                Description = property.Description ?? string.Empty,
+                Type = property.Type,
+                IsRequired = property.IsRequired,
+                SortOrder = property.SortOrder,
+                DefaultValue = property.DefaultValue ?? string.Empty,
+                MinLength = property.MinLength,
+                MaxLength = property.MaxLength,
+                MinValue = property.MinValue,
+                MaxValue = property.MaxValue,
+                Pattern = property.Pattern ?? string.Empty,
+                OptionsText = string.Join(
+                    Environment.NewLine,
+                    property.Options.Select(o => $"{o.Value}|{o.Label}"))
+            };
+
+        public CreateTemplatePropertyRequest ToCreateRequest() =>
+            new(
+                Name,
+                DisplayName,
+                string.IsNullOrWhiteSpace(Description) ? null : Description,
+                Type,
+                IsRequired,
+                SortOrder,
+                string.IsNullOrWhiteSpace(DefaultValue) ? null : DefaultValue,
+                MinLength,
+                MaxLength,
+                MinValue,
+                MaxValue,
+                string.IsNullOrWhiteSpace(Pattern) ? null : Pattern,
+                ParseOptions());
+
+        public UpdateTemplatePropertyRequest ToUpdateRequest() =>
+            new(
+                DisplayName,
+                string.IsNullOrWhiteSpace(Description) ? null : Description,
+                IsRequired,
+                SortOrder,
+                string.IsNullOrWhiteSpace(DefaultValue) ? null : DefaultValue,
+                MinLength,
+                MaxLength,
+                MinValue,
+                MaxValue,
+                string.IsNullOrWhiteSpace(Pattern) ? null : Pattern,
+                ParseOptions());
+
+        private IReadOnlyList<SelectOptionDto>? ParseOptions()
+        {
+            if (Type is not (PropertyType.Select or PropertyType.MultiSelect))
+            {
+                return null;
+            }
+
+            var lines = OptionsText
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (lines.Length == 0)
+            {
+                return null;
+            }
+
+            return lines.Select((line, index) =>
+            {
+                var parts = line.Split('|', 2);
+                var value = parts[0].Trim();
+                var label = parts.Length > 1 ? parts[1].Trim() : value;
+                return new SelectOptionDto(value, label, index * 10);
+            }).ToList();
+        }
+    }
+}

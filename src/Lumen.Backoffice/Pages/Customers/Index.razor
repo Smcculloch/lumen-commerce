@@ -1,0 +1,77 @@
+@page "/customers"
+@using Lumen.Application.Customers
+@using Lumen.Application.Customers.Dtos
+@using Lumen.Backoffice.Components.Content
+@inject ICustomerService CustomerService
+
+<PageTitle>Customers</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="mb-0">Customers</h1>
+        <p class="text-muted mb-0">Registered storefront customers linked to Identity accounts.</p>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <p><em>Loading customers...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_customers.Count == 0)
+{
+    <div class="alert alert-info">No customers yet. Customers are created when users register on the storefront.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Email</th>
+                    <th>Display name</th>
+                    <th>Registered</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var customer in _customers)
+                {
+                    <tr>
+                        <td>@customer.Email</td>
+                        <td>@(customer.DisplayName ?? "—")</td>
+                        <td class="text-muted small">@customer.CreatedAt.LocalDateTime.ToString("g")</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-primary" href="customers/@customer.Id">View</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private IReadOnlyList<CustomerDto> _customers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _customers = await CustomerService.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

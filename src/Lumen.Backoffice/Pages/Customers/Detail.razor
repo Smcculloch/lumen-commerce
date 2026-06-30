@@ -1,0 +1,85 @@
+@page "/customers/{Id:guid}"
+@using Lumen.Application.Customers
+@using Lumen.Application.Customers.Dtos
+@inject ICustomerService CustomerService
+
+<PageTitle>Customer</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="customers">Customers</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Details</li>
+    </ol>
+</nav>
+
+@if (_loading)
+{
+    <p><em>Loading customer...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_customer is not null)
+{
+    <h1 class="mb-3">@(_customer.DisplayName ?? _customer.Email)</h1>
+
+    <div class="card">
+        <div class="card-header">Customer profile</div>
+        <div class="card-body">
+            <dl class="row mb-0">
+                <dt class="col-sm-3">Email</dt>
+                <dd class="col-sm-9">@_customer.Email</dd>
+
+                <dt class="col-sm-3">Display name</dt>
+                <dd class="col-sm-9">@(_customer.DisplayName ?? "—")</dd>
+
+                <dt class="col-sm-3">User ID</dt>
+                <dd class="col-sm-9"><code class="small">@_customer.UserId</code></dd>
+
+                <dt class="col-sm-3">Customer ID</dt>
+                <dd class="col-sm-9"><code class="small">@_customer.Id</code></dd>
+
+                <dt class="col-sm-3">Registered</dt>
+                <dd class="col-sm-9">@_customer.CreatedAt.LocalDateTime.ToString("f")</dd>
+
+                <dt class="col-sm-3">Last updated</dt>
+                <dd class="col-sm-9">@_customer.UpdatedAt.LocalDateTime.ToString("f")</dd>
+            </dl>
+        </div>
+    </div>
+
+    <a class="btn btn-outline-secondary mt-3" href="customers">Back to customers</a>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private CustomerDto? _customer;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _customer = await CustomerService.GetByIdAsync(Id);
+            if (_customer is null)
+            {
+                _error = "Customer not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

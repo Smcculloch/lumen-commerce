@@ -1,0 +1,447 @@
+@page "/content/new"
+@page "/content/edit/{Id:guid}"
+@using Lumen.Application.Content
+@using Lumen.Application.Content.Dtos
+@using Lumen.Application.Templates
+@using Lumen.Backoffice.Components.Content
+@using Lumen.Domain.Enums
+@using Lumen.Domain.Exceptions
+@using Lumen.Domain.Templates
+@inject IContentService ContentService
+@inject ITemplateRegistry TemplateRegistry
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="content">Content</a></li>
+        @if (_parent is not null)
+        {
+            <li class="breadcrumb-item"><a href="content/edit/@_parent.Id">@_parent.Name</a></li>
+        }
+        <li class="breadcrumb-item active" aria-current="page">@BreadcrumbText</li>
+    </ol>
+</nav>
+
+<h1>@PageTitleText</h1>
+
+@if (_loading)
+{
+    <p><em>Loading editor...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+    <a class="btn btn-secondary" href="content">Back to content</a>
+}
+else if (IsCreate && string.IsNullOrWhiteSpace(Template) && _templates.Count > 0)
+{
+    @if (_parent is not null)
+    {
+        <div class="alert alert-info">
+            Creating a <strong>child page</strong> under
+            <a href="content/edit/@_parent.Id">@_parent.Name</a>
+            (<code>@_parent.FullPath</code>).
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-secondary">Creating a <strong>root-level</strong> page (no parent).</div>
+    }
+
+    <div class="card">
+        <div class="card-header">Choose a content template</div>
+        <div class="list-group list-group-flush">
+            @foreach (var template in _templates)
+            {
+                <a class="list-group-item list-group-item-action" href="@BuildNewUrl(template.Key)">
+                    <div class="fw-semibold">@template.DisplayName</div>
+                    <div class="text-muted small">@template.Key</div>
+                    @if (!string.IsNullOrWhiteSpace(template.Description))
+                    {
+                        <div class="small mt-1">@template.Description</div>
+                    }
+                </a>
+            }
+        </div>
+    </div>
+}
+else
+{
+    <AlertBanner Message="@_bannerMessage" IsError="@_bannerIsError" OnDismiss="ClearBanner" />
+
+    @if (IsCreate && _parent is not null)
+    {
+        <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <strong>Child page</strong> under
+                <a href="content/edit/@_parent.Id">@_parent.Name</a>
+                · URL will be under <code>@_parent.FullPath</code>
+            </div>
+            <a class="btn btn-sm btn-outline-primary" href="content/new?template=@Uri.EscapeDataString(Template!)">
+                Change to root page
+            </a>
+        </div>
+    }
+    else if (IsCreate)
+    {
+        <div class="alert alert-secondary">
+            <strong>Root page</strong> — no parent. Use the selector below to place under an existing page instead.
+        </div>
+    }
+
+    @if (_resolvedTemplate is not null)
+    {
+        <div class="text-muted mb-3">
+            Template: <strong>@_resolvedTemplate.DisplayName</strong>
+            <span class="ms-2">(@_resolvedTemplate.Key)</span>
+        </div>
+    }
+
+    <EditForm Model="_form" OnValidSubmit="SaveAsync">
+        <div class="card mb-3">
+            <div class="card-header">Page details</div>
+            <div class="card-body">
+                @if (IsCreate)
+                {
+                    <div class="mb-3">
+                        <label class="form-label" for="content-parent">Parent page</label>
+                        <select id="content-parent" class="form-select" @bind="_selectedParentId">
+                            <option value="">— Root (no parent) —</option>
+                            @foreach (var option in _parentOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                        <div class="form-text">Child pages inherit the parent path (e.g. Home → Privacy becomes /home/privacy).</div>
+                    </div>
+                }
+                else if (_parent is not null)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Parent page</label>
+                        <div><a href="content/edit/@_parent.Id">@_parent.Name</a> <code class="small">@_parent.FullPath</code></div>
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label" for="content-name">Name <span class="text-danger">*</span></label>
+                    <InputText id="content-name" class="form-control" @bind-Value="_form.Name" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="content-slug">URL slug</label>
+                    <InputText id="content-slug" class="form-control" @bind-Value="_form.Slug" />
+                    <div class="form-text">Leave blank to auto-generate from the name.</div>
+                </div>
+                @if (IsEdit)
+                {
+                    <div class="mb-0">
+                        <label class="form-label">Status</label>
+                        <div><StatusBadge Status="_existing!.Status" /></div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <TemplatePropertyForm Template="_resolvedTemplate"
+                              PropertyValues="_propertyValues"
+                              ValidationErrors="_validationErrors" />
+
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                @(_saving ? "Saving..." : "Save")
+            </button>
+            <button type="button" class="btn btn-success" disabled="@_saving" @onclick="SaveAndPublishAsync">
+                Save &amp; Publish
+            </button>
+            <a class="btn btn-outline-secondary" href="content">Cancel</a>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid? ParentId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string? Template { get; set; }
+
+    private bool IsEdit => Id.HasValue;
+    private bool IsCreate => !IsEdit;
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private ContentDto? _existing;
+    private ContentDto? _parent;
+    private ResolvedTemplateDefinition? _resolvedTemplate;
+    private IReadOnlyList<ResolvedTemplateDefinition> _templates = [];
+    private IReadOnlyDictionary<string, string[]>? _validationErrors;
+    private List<ParentOption> _parentOptions = [];
+    private string _selectedParentId = string.Empty;
+
+    private readonly EditorForm _form = new();
+    private readonly Dictionary<string, string> _propertyValues = new(StringComparer.OrdinalIgnoreCase);
+
+    private string PageTitleText => IsCreate
+        ? _parent is not null ? $"Create child under {_parent.Name}" : "Create content"
+        : $"Edit: {_form.Name}";
+
+    private string BreadcrumbText => IsCreate
+        ? _parent is not null ? $"New child of {_parent.Name}" : "Create"
+        : "Edit";
+
+    private string? _loadedStateKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var stateKey = $"{Id}|{ParentId}|{Template}";
+        if (string.Equals(stateKey, _loadedStateKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _loading = true;
+        _error = null;
+        _bannerMessage = null;
+        _validationErrors = null;
+
+        try
+        {
+            _templates = (await TemplateRegistry.GetAllAsync(TemplateKind.Content))
+                .Where(t => !t.IsDynamic || t.Properties.Count > 0)
+                .OrderBy(t => t.DisplayName)
+                .ToList();
+
+            await LoadParentOptionsAsync();
+
+            _parent = null;
+            if (ParentId is Guid parentId)
+            {
+                _parent = await ContentService.GetContentByIdAsync(parentId);
+                _selectedParentId = parentId.ToString();
+            }
+
+            _resolvedTemplate = null;
+            _propertyValues.Clear();
+
+            if (IsEdit)
+            {
+                await LoadExistingAsync(Id!.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(Template))
+            {
+                await LoadCreateAsync();
+            }
+
+            _loadedStateKey = stateKey;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _loadedStateKey = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadParentOptionsAsync()
+    {
+        var roots = await ContentService.GetRootsAsync();
+        var childrenByParent = await ContentTreeHelper.LoadChildrenLookupAsync(
+            roots,
+            parentId => ContentService.GetChildrenAsync(parentId));
+
+        _parentOptions = ContentTreeHelper.FlattenAll(roots, childrenByParent)
+            .Select(c => new ParentOption(c.Id, $"{new string('—', c.Level)} {c.Name} ({c.FullPath})".Trim()))
+            .ToList();
+    }
+
+    private async Task LoadExistingAsync(Guid id)
+    {
+        _existing = await ContentService.GetContentByIdAsync(id)
+            ?? throw new InvalidOperationException("Content not found.");
+
+        _form.Name = _existing.Name;
+        _form.Slug = _existing.Slug;
+        Template = _existing.TemplateKey;
+
+        if (_existing.ParentId is Guid parentId)
+        {
+            _parent = await ContentService.GetContentByIdAsync(parentId);
+            _selectedParentId = parentId.ToString();
+        }
+
+        _resolvedTemplate = await TemplateRegistry.GetByKeyAsync(_existing.TemplateKey)
+            ?? throw new InvalidOperationException($"Template '{_existing.TemplateKey}' not found.");
+
+        foreach (var property in _resolvedTemplate.Properties)
+        {
+            _existing.Properties.TryGetValue(property.Name, out var value);
+            _propertyValues[property.Name] = PropertyValueConverter.ToFormString(value, property.Type);
+        }
+    }
+
+    private async Task LoadCreateAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedParentId) && Guid.TryParse(_selectedParentId, out var parsedParentId))
+        {
+            ParentId = parsedParentId;
+            _parent = await ContentService.GetContentByIdAsync(parsedParentId);
+        }
+
+        _resolvedTemplate = await TemplateRegistry.GetByKeyAsync(Template!)
+            ?? throw new InvalidOperationException($"Template '{Template}' not found.");
+
+        foreach (var property in _resolvedTemplate.Properties)
+        {
+            _propertyValues[property.Name] = PropertyValueConverter.ToFormString(property.DefaultValue, property.Type);
+        }
+    }
+
+    private Guid? ResolveParentId()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedParentId))
+        {
+            return null;
+        }
+
+        return Guid.TryParse(_selectedParentId, out var id) ? id : ParentId;
+    }
+
+    private async Task SaveAsync() => await SaveInternalAsync(publish: false);
+
+    private async Task SaveAndPublishAsync() => await SaveInternalAsync(publish: true);
+
+    private async Task SaveInternalAsync(bool publish)
+    {
+        _saving = true;
+        _bannerMessage = null;
+        _bannerIsError = false;
+        _validationErrors = null;
+
+        try
+        {
+            var properties = BuildProperties();
+            ContentDto saved;
+            var parentId = IsCreate ? ResolveParentId() : _existing!.ParentId;
+
+            if (IsEdit)
+            {
+                saved = await ContentService.UpdateContentAsync(
+                    Id!.Value,
+                    new UpdateContentRequest(
+                        _form.Name,
+                        string.IsNullOrWhiteSpace(_form.Slug) ? null : _form.Slug,
+                        parentId,
+                        _existing!.SortOrder,
+                        properties));
+            }
+            else
+            {
+                saved = await ContentService.CreateContentAsync(
+                    new CreateContentRequest(
+                        Template!,
+                        _form.Name,
+                        string.IsNullOrWhiteSpace(_form.Slug) ? null : _form.Slug,
+                        parentId,
+                        SortOrder: 0,
+                        properties));
+            }
+
+            if (publish)
+            {
+                saved = await ContentService.PublishContentAsync(saved.Id);
+                Navigation.NavigateTo("content?published=1", forceLoad: true);
+            }
+            else
+            {
+                Navigation.NavigateTo("content?saved=1", forceLoad: true);
+            }
+        }
+        catch (TemplateValidationException ex)
+        {
+            _validationErrors = ex.Errors;
+            _bannerMessage = "Please fix the validation errors below.";
+            _bannerIsError = true;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Dictionary<string, object?> BuildProperties()
+    {
+        var properties = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+
+        if (_resolvedTemplate is null)
+        {
+            return properties;
+        }
+
+        foreach (var property in _resolvedTemplate.Properties)
+        {
+            if (!_propertyValues.TryGetValue(property.Name, out var raw))
+            {
+                continue;
+            }
+
+            properties[property.Name] = PropertyValueConverter.FromFormString(raw, property.Type);
+        }
+
+        if (_resolvedTemplate.FindProperty("title") is not null)
+        {
+            properties["title"] = _form.Name;
+        }
+
+        if (_resolvedTemplate.FindProperty("slug") is not null)
+        {
+            properties["slug"] = string.IsNullOrWhiteSpace(_form.Slug) ? _form.Name : _form.Slug;
+        }
+
+        return properties;
+    }
+
+    private void ClearBanner()
+    {
+        _bannerMessage = null;
+        _bannerIsError = false;
+    }
+
+    private string BuildNewUrl(string templateKey)
+    {
+        var url = $"content/new?template={Uri.EscapeDataString(templateKey)}";
+        if (!string.IsNullOrWhiteSpace(_selectedParentId))
+        {
+            url += $"&parentId={_selectedParentId}";
+        }
+        else if (ParentId is Guid parentId)
+        {
+            url += $"&parentId={parentId}";
+        }
+
+        return url;
+    }
+
+    private sealed record ParentOption(Guid Id, string Label);
+
+    private sealed class EditorForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+    }
+}

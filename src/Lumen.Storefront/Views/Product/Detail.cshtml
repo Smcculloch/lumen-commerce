@@ -1,0 +1,107 @@
+@model Lumen.Storefront.Models.ProductDetailViewModel
+
+<article class="product-detail">
+    <header class="mb-4">
+        <p class="text-muted small mb-1"><code>@Model.Sku</code></p>
+        <h1 class="display-5">@Model.Name</h1>
+        @if (!string.IsNullOrWhiteSpace(Model.ShortDescription))
+        {
+            <p class="lead">@Model.ShortDescription</p>
+        }
+    </header>
+
+    @if (Model.Price is decimal price)
+    {
+        <div class="mb-4">
+            <span class="fs-4 fw-semibold">@price.ToString("C")</span>
+            @if (Model.CompareAtPrice is decimal compare && compare > price)
+            {
+                <span class="text-muted text-decoration-line-through ms-2">@compare.ToString("C")</span>
+            }
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Model.Description))
+    {
+        <div class="product-description mb-4">
+            @Html.Raw(Model.Description)
+        </div>
+    }
+
+    <form method="post" action="/cart/add" class="card mb-4">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="ProductId" value="@Model.Id" />
+        <input type="hidden" name="returnUrl" value="/products/@Model.Sku" />
+        <div class="card-body">
+            <h2 class="h5 mb-3">Add to cart</h2>
+            @if (Model.Variants.Count > 0)
+            {
+                <div class="mb-3">
+                    <label class="form-label" for="variant">Variant</label>
+                    <select class="form-select" id="variant" name="ProductVariantId">
+                        <option value="">Base product (@Model.Sku)</option>
+                        @foreach (var variant in Model.Variants)
+                        {
+                            <option value="@variant.Id">@variant.Name (@variant.Sku)</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="row g-3 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label" for="quantity">Quantity</label>
+                    <input class="form-control" type="number" id="quantity" name="Quantity" value="1" min="1" />
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Add to cart</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    @if (Model.Variants.Count > 0)
+    {
+        <section class="mb-4">
+            <h2 class="h5">Available variants</h2>
+            <ul class="list-group">
+                @foreach (var variant in Model.Variants)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>@variant.Name</span>
+                        <code class="small">@variant.Sku</code>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <section class="mb-4">
+        <form method="post" action="/cart/add" class="row g-2 align-items-end">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ProductId" value="@Model.Id" />
+            <input type="hidden" name="returnUrl" value="/products/@Model.Sku" />
+            @if (Model.Variants.Count > 0)
+            {
+                <div class="col-md-5">
+                    <label class="form-label" for="variant">Variant</label>
+                    <select id="variant" name="ProductVariantId" class="form-select">
+                        <option value="">Base product</option>
+                        @foreach (var variant in Model.Variants)
+                        {
+                            <option value="@variant.Id">@variant.Name (@variant.Sku)</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="col-md-2">
+                <label class="form-label" for="qty">Qty</label>
+                <input id="qty" type="number" name="Quantity" value="1" min="1" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">Add to cart</button>
+            </div>
+        </form>
+    </section>
+
+    <p class="text-muted small">Template: @Model.TemplateKey</p>
+</article>

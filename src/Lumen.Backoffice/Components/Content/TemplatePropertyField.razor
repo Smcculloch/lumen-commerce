@@ -1,0 +1,164 @@
+@using Lumen.Domain.Enums
+@using Lumen.Domain.Templates
+
+<div class="mb-3">
+    <label class="form-label" for="@InputId">
+        @Definition.DisplayName
+        @if (Definition.IsRequired)
+        {
+            <span class="text-danger">*</span>
+        }
+    </label>
+
+    @switch (Definition.Type)
+    {
+        case PropertyType.RichText:
+        case PropertyType.Html:
+            <textarea id="@InputId" class="form-control @(HasError ? "is-invalid" : null)" rows="6"
+                      value="@Value" @onchange="OnTextAreaChanged"></textarea>
+            break;
+
+        case PropertyType.Boolean:
+            <div class="form-check">
+                <input id="@InputId" class="form-check-input @(HasError ? "is-invalid" : null)" type="checkbox"
+                       checked="@IsChecked" @onchange="OnCheckboxChanged" />
+                <label class="form-check-label" for="@InputId">@Definition.Description</label>
+            </div>
+            break;
+
+        case PropertyType.Integer:
+        case PropertyType.Number:
+            <input id="@InputId" class="form-control @(HasError ? "is-invalid" : null)" type="number" step="1"
+                   value="@Value" @onchange="OnInputChanged" />
+            break;
+
+        case PropertyType.Decimal:
+            <input id="@InputId" class="form-control @(HasError ? "is-invalid" : null)" type="number" step="0.01"
+                   value="@Value" @onchange="OnInputChanged" />
+            break;
+
+        case PropertyType.DateTime:
+            <input id="@InputId" class="form-control @(HasError ? "is-invalid" : null)" type="datetime-local"
+                   value="@Value" @onchange="OnInputChanged" />
+            break;
+
+        case PropertyType.Select:
+            <select id="@InputId" class="form-select @(HasError ? "is-invalid" : null)" value="@Value" @onchange="OnSelectChanged">
+                <option value="">-- Select --</option>
+                @foreach (var option in Definition.Options.OrderBy(o => o.SortOrder))
+                {
+                    <option value="@option.Value">@option.Label</option>
+                }
+            </select>
+            break;
+
+        case PropertyType.MultiSelect:
+            <div class="border rounded p-2 @(HasError ? "is-invalid" : null)">
+                @foreach (var option in Definition.Options.OrderBy(o => o.SortOrder))
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="@($"{InputId}-{option.Value}")"
+                               checked="@IsOptionSelected(option.Value)"
+                               @onchange="e => OnMultiSelectChanged(option.Value, e)" />
+                        <label class="form-check-label" for="@($"{InputId}-{option.Value}")">@option.Label</label>
+                    </div>
+                }
+            </div>
+            break;
+
+        case PropertyType.Json:
+        case PropertyType.Image:
+        case PropertyType.MediaReference:
+        case PropertyType.Reference:
+            <textarea id="@InputId" class="form-control font-monospace @(HasError ? "is-invalid" : null)" rows="3"
+                      value="@Value" @onchange="OnTextAreaChanged"
+                      placeholder="@Placeholder"></textarea>
+            break;
+
+        default:
+            <input id="@InputId" class="form-control @(HasError ? "is-invalid" : null)" type="text"
+                   value="@Value" @onchange="OnInputChanged" />
+            break;
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Definition.Description) && Definition.Type != PropertyType.Boolean)
+    {
+        <div class="form-text">@Definition.Description</div>
+    }
+
+    @if (HasError)
+    {
+        <div class="invalid-feedback d-block">
+            @string.Join(" ", Errors!)
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public PropertyDefinition Definition { get; set; } = null!;
+
+    [Parameter]
+    public string Value { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter]
+    public string[]? Errors { get; set; }
+
+    private string InputId => $"prop-{Definition.Name}";
+    private bool HasError => Errors is { Length: > 0 };
+    private bool IsChecked => bool.TryParse(Value, out var b) && b;
+
+    private string Placeholder => Definition.Type switch
+    {
+        PropertyType.Image or PropertyType.MediaReference => "Media ID or URL",
+        PropertyType.Reference => "Reference ID",
+        PropertyType.Json => "{ \"key\": \"value\" }",
+        _ => string.Empty
+    };
+
+    private bool IsOptionSelected(string optionValue) =>
+        Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(v => string.Equals(v, optionValue, StringComparison.OrdinalIgnoreCase));
+
+    private async Task OnInputChanged(ChangeEventArgs e)
+    {
+        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty);
+    }
+
+    private async Task OnTextAreaChanged(ChangeEventArgs e)
+    {
+        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty);
+    }
+
+    private async Task OnSelectChanged(ChangeEventArgs e)
+    {
+        await ValueChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty);
+    }
+
+    private async Task OnCheckboxChanged(ChangeEventArgs e)
+    {
+        var isChecked = e.Value is bool b && b;
+        await ValueChanged.InvokeAsync(isChecked ? "true" : "false");
+    }
+
+    private async Task OnMultiSelectChanged(string optionValue, ChangeEventArgs e)
+    {
+        var selected = Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var isChecked = e.Value is bool b && b;
+        if (isChecked)
+        {
+            selected.Add(optionValue);
+        }
+        else
+        {
+            selected.Remove(optionValue);
+        }
+
+        await ValueChanged.InvokeAsync(string.Join(", ", selected.OrderBy(x => x)));
+    }
+}
