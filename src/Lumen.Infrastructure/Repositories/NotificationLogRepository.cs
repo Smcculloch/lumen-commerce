@@ -20,12 +20,13 @@ public sealed class NotificationLogRepository : INotificationLogRepository
 
     public async Task<IReadOnlyList<NotificationLog>> ListRecentAsync(int take, CancellationToken cancellationToken = default)
     {
-        var entities = await _dbContext.NotificationLogs
+        var entities = await _dbContext.NotificationLogs.ToListAsync(cancellationToken);
+
+        return entities
             .OrderByDescending(x => x.CreatedAt)
             .Take(take)
-            .ToListAsync(cancellationToken);
-
-        return entities.Select(JobMapping.ToDomain).ToList();
+            .Select(JobMapping.ToDomain)
+            .ToList();
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) =>

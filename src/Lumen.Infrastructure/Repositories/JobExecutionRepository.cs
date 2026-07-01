@@ -20,20 +20,24 @@ public sealed class JobExecutionRepository : IJobExecutionRepository
 
     public async Task<IReadOnlyList<JobExecution>> ListRecentAsync(int take, CancellationToken cancellationToken = default)
     {
-        var entities = await _dbContext.JobExecutions
+        var entities = await _dbContext.JobExecutions.ToListAsync(cancellationToken);
+
+        return entities
             .OrderByDescending(x => x.StartedAt)
             .Take(take)
-            .ToListAsync(cancellationToken);
-
-        return entities.Select(JobMapping.ToDomain).ToList();
+            .Select(JobMapping.ToDomain)
+            .ToList();
     }
 
     public async Task<JobExecution?> GetLatestForJobAsync(string jobKey, CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.JobExecutions
+        var entities = await _dbContext.JobExecutions
             .Where(x => x.JobKey == jobKey)
+            .ToListAsync(cancellationToken);
+
+        var entity = entities
             .OrderByDescending(x => x.StartedAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefault();
 
         return entity is null ? null : JobMapping.ToDomain(entity);
     }
