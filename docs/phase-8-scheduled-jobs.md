@@ -84,8 +84,18 @@ Set `Jobs:Enabled` to `false` to disable the Quartz scheduler (manual trigger wi
 
 - Job handlers live in `Lumen.Infrastructure/Jobs/Handlers/`; Quartz wrappers in `Jobs/Quartz/`
 - `JobExecutionLogger` records each run to SQLite
-- Storefront does not host the scheduler — only shared job service registrations for order history
+- Quartz + `IJobRunner` registered only in backoffice via `AddLumenScheduledJobs` (not storefront)
+- **SQLite rule:** never compare or sort `DateTimeOffset` in EF SQL — fetch with `ToListAsync()`, filter/sort in memory
 - Extending jobs: add handler + Quartz job + register in `JobServiceCollectionExtensions`
+
+## Post-phase fixes
+
+| Commit | Fix |
+|--------|-----|
+| `7388b58` | Job DI — `IJobRunner` no longer required in storefront; optional Quartz with direct handler fallback |
+| `605faac` | `DateTimeOffset` ORDER BY in job execution repos |
+| `c28efb4` | Cart `Items.Count` filter — client-side after fetch |
+| `bdbd0fe` | `DateTimeOffset` WHERE comparisons in cart/order job queries |
 
 ## Verification checklist
 
@@ -112,6 +122,13 @@ dotnet run --project src/Lumen.Backoffice --urls http://localhost:5258
 5. Customer detail → **View orders** (customer filter)
 
 Storefront: `http://localhost:5267` | Backoffice: `http://localhost:5258`
+
+## Commits
+
+| Commit | Description |
+|--------|-------------|
+| `c8a68d6` | Phase 8: advanced order management + scheduled jobs |
+| `7388b58`–`bdbd0fe` | SQLite + DI hotfixes |
 
 ## Out of scope (future phases)
 
