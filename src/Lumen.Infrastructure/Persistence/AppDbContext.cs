@@ -27,6 +27,9 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<CartItemEntity> CartItems => Set<CartItemEntity>();
     public DbSet<OrderEntity> Orders => Set<OrderEntity>();
     public DbSet<OrderLineItemEntity> OrderLineItems => Set<OrderLineItemEntity>();
+    public DbSet<OrderHistoryEntryEntity> OrderHistoryEntries => Set<OrderHistoryEntryEntity>();
+    public DbSet<JobExecutionEntity> JobExecutions => Set<JobExecutionEntity>();
+    public DbSet<NotificationLogEntity> NotificationLogs => Set<NotificationLogEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -219,6 +222,39 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(x => x.Items)
                 .HasForeignKey(x => x.OrderId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrderHistoryEntryEntity>(entity =>
+        {
+            entity.ToTable("OrderHistoryEntries");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.OrderId, x.CreatedAt });
+            entity.Property(x => x.Message).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.Actor).HasMaxLength(256);
+            entity.HasOne(x => x.Order)
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<JobExecutionEntity>(entity =>
+        {
+            entity.ToTable("JobExecutions");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.JobKey, x.StartedAt });
+            entity.Property(x => x.JobKey).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Message).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<NotificationLogEntity>(entity =>
+        {
+            entity.ToTable("NotificationLogs");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.CreatedAt);
+            entity.Property(x => x.Type).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.Recipient).HasMaxLength(256).IsRequired();
+            entity.Property(x => x.Subject).HasMaxLength(512).IsRequired();
+            entity.Property(x => x.Body).HasMaxLength(4000).IsRequired();
         });
     }
 }

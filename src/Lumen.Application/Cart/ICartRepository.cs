@@ -10,5 +10,7 @@ public interface ICartRepository
     Task AddAsync(ShoppingCart cart, CancellationToken cancellationToken = default);
     Task UpdateAsync(ShoppingCart cart, CancellationToken cancellationToken = default);
     Task DeleteAsync(ShoppingCart cart, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ShoppingCart>> ListInactiveWithItemsAsync(DateTimeOffset inactiveSince, CancellationToken cancellationToken = default);
+    Task<int> DeleteStaleCartsAsync(DateTimeOffset olderThan, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

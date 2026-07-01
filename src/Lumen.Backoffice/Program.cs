@@ -12,6 +12,7 @@ var databasePath = DatabasePath.Resolve(builder.Environment.ContentRootPath);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? DatabasePath.ToConnectionString(databasePath);
 builder.Services.AddLumenInfrastructure(connectionString, builder.Configuration);
+builder.Services.AddLumenScheduledJobs(builder.Configuration);
 
 if (builder.Environment.IsDevelopment())
 {

@@ -1,5 +1,6 @@
 using Lumen.Application.Orders;
 using Lumen.Application.Orders.Dtos;
+using Lumen.Domain.Enums;
 using Lumen.Domain.Orders;
 using Lumen.Infrastructure.Persistence;
 using Lumen.Infrastructure.Persistence.Mapping;
@@ -45,6 +46,16 @@ public sealed class OrderRepository : IOrderRepository
             query = query.Where(x => x.Status == status);
         }
 
+        if (filter.PaymentStatus is { } paymentStatus)
+        {
+            query = query.Where(x => x.PaymentStatus == paymentStatus);
+        }
+
+        if (filter.CustomerId is { } customerId)
+        {
+            query = query.Where(x => x.CustomerId == customerId);
+        }
+
         if (filter.From is { } from)
         {
             query = query.Where(x => x.CreatedAt >= from);
@@ -70,6 +81,20 @@ public sealed class OrderRepository : IOrderRepository
             .OrderByDescending(x => x.CreatedAt)
             .Select(InstanceMapping.ToDomain)
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<Order>> ListStalePendingAsync(
+        DateTimeOffset olderThan,
+        CancellationToken cancellationToken = default)
+    {
+        var entities = await _dbContext.Orders
+            .Include(x => x.Items)
+            .Where(x =>
+                (x.Status == OrderStatus.Pending || x.Status == OrderStatus.Processing) &&
+                x.UpdatedAt <= olderThan)
+            .ToListAsync(cancellationToken);
+
+        return entities.Select(InstanceMapping.ToDomain).ToList();
     }
 
     public Task<int> CountAsync(CancellationToken cancellationToken = default) =>

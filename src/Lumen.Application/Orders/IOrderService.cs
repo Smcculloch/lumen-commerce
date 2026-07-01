@@ -17,6 +17,10 @@ public interface IOrderService
     Task<OrderDto?> GetByOrderNumberAsync(string orderNumber, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<OrderDto>> ListAsync(OrderListFilter filter, CancellationToken cancellationToken = default);
     Task<OrderDto> UpdateStatusAsync(Guid id, OrderStatus status, CancellationToken cancellationToken = default);
+    Task<OrderDto> UpdateStatusWithNoteAsync(Guid id, UpdateOrderStatusRequest request, CancellationToken cancellationToken = default);
+    Task<OrderDto> CancelOrderAsync(Guid id, string? reason = null, string? actor = null, CancellationToken cancellationToken = default);
+    Task<OrderDto> SendOrderNotificationAsync(Guid id, string? message = null, string? actor = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<OrderHistoryEntryDto>> GetOrderHistoryAsync(Guid id, CancellationToken cancellationToken = default);
     Task<OrderDto> CapturePaymentAsync(Guid orderId, CancellationToken cancellationToken = default);
     Task<OrderDto> RefundPaymentAsync(Guid orderId, decimal amount, CancellationToken cancellationToken = default);
 }

@@ -1,0 +1,221 @@
+@page "/jobs"
+@using Lumen.Application.Jobs
+@using Lumen.Application.Jobs.Dtos
+@using Lumen.Domain.Jobs
+@inject IJobRunner JobRunner
+
+<PageTitle>Scheduled jobs</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h1 class="mb-0">Scheduled jobs</h1>
+        <p class="text-muted mb-0">Background jobs powered by Quartz.NET. Notifications are logged, not emailed.</p>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" disabled="@_loading" @onclick="ReloadAsync">
+        Refresh
+    </button>
+</div>
+
+@if (_bannerMessage is not null)
+{
+    <div class="alert @(_bannerIsError ? "alert-danger" : "alert-success")">@_bannerMessage</div>
+}
+
+@if (_loading)
+{
+    <p><em>Loading jobs...</em></p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-header">Registered jobs</div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Job</th>
+                        <th>Schedule</th>
+                        <th>Last run</th>
+                        <th>Last status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in _jobs)
+                    {
+                        var latest = _latestByKey.GetValueOrDefault(job.Key);
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">@job.DisplayName</div>
+                                <div class="text-muted small">@job.Description</div>
+                                <code class="small">@job.Key</code>
+                            </td>
+                            <td class="small"><code>@job.CronExpression</code></td>
+                            <td class="small text-muted">
+                                @(latest?.StartedAt.LocalDateTime.ToString("g") ?? "—")
+                            </td>
+                            <td>
+                                @if (latest is null)
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                                else
+                                {
+                                    <span class="badge @StatusBadgeClass(latest.Status)">@latest.Status</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-primary"
+                                        disabled="@IsTriggering(job.Key)"
+                                        @onclick="() => TriggerJobAsync(job.Key)">
+                                    @(IsTriggering(job.Key) ? "Running..." : "Run now")
+                                </button>
+                            </td>
+                        </tr>
+                        @if (latest?.Message is not null)
+                        {
+                            <tr class="table-light">
+                                <td colspan="5" class="small text-muted py-1">
+                                    Last message: @latest.Message
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Recent executions</div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Job</th>
+                        <th>Status</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_executions.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="text-muted">No executions recorded yet.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var run in _executions)
+                        {
+                            <tr>
+                                <td><code class="small">@run.JobKey</code></td>
+                                <td><span class="badge @StatusBadgeClass(run.Status)">@run.Status</span></td>
+                                <td class="small">@run.StartedAt.LocalDateTime.ToString("g")</td>
+                                <td class="small text-muted">@FormatDuration(run)</td>
+                                <td class="small text-muted">@(run.Message ?? "—")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private string? _bannerMessage;
+    private bool _bannerIsError;
+    private IReadOnlyList<JobDefinitionDto> _jobs = [];
+    private IReadOnlyList<JobExecutionDto> _executions = [];
+    private Dictionary<string, JobExecutionDto?> _latestByKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _triggering = new(StringComparer.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _jobs = JobRunner.ListJobs();
+            _executions = await JobRunner.ListRecentExecutionsAsync(30);
+
+            var latest = new Dictionary<string, JobExecutionDto?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var job in _jobs)
+            {
+                latest[job.Key] = await JobRunner.GetLatestExecutionAsync(job.Key);
+            }
+
+            _latestByKey = latest;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task TriggerJobAsync(string jobKey)
+    {
+        _triggering.Add(jobKey);
+        _bannerMessage = null;
+
+        try
+        {
+            var result = await JobRunner.TriggerAsync(jobKey);
+            _bannerMessage = result.Message;
+            _bannerIsError = !result.Succeeded;
+
+            if (result.Succeeded)
+            {
+                await Task.Delay(1500);
+                await ReloadAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _triggering.Remove(jobKey);
+        }
+    }
+
+    private bool IsTriggering(string jobKey) => _triggering.Contains(jobKey);
+
+    private static string StatusBadgeClass(JobExecutionStatus status) => status switch
+    {
+        JobExecutionStatus.Succeeded => "bg-success",
+        JobExecutionStatus.Failed => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string FormatDuration(JobExecutionDto run)
+    {
+        if (run.CompletedAt is null)
+        {
+            return "—";
+        }
+
+        var duration = run.CompletedAt.Value - run.StartedAt;
+        return duration.TotalSeconds < 60
+            ? $"{duration.TotalSeconds:F1}s"
+            : $"{duration.TotalMinutes:F1}m";
+    }
+}

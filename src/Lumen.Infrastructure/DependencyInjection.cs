@@ -11,6 +11,7 @@ using Lumen.Application.Templates.Management;
 using Lumen.Infrastructure.Persistence;
 using Lumen.Infrastructure.Persistence.Seed;
 using Lumen.Infrastructure.Repositories;
+using Lumen.Infrastructure.Jobs;
 using Lumen.Infrastructure.Payments;
 using Lumen.Infrastructure.Templates;
 using Microsoft.EntityFrameworkCore;
@@ -42,9 +43,16 @@ public static class DependencyInjection
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IOrderHistoryRepository, OrderHistoryRepository>();
+        services.AddLumenJobServices(configuration);
 
         return services;
     }
+
+    public static IServiceCollection AddLumenScheduledJobs(
+        this IServiceCollection services,
+        IConfiguration configuration) =>
+        services.AddLumenQuartzScheduler(configuration);
 
     public static async Task InitializeLumenDatabaseAsync(this IServiceProvider services)
     {

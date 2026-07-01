@@ -85,6 +85,37 @@ public sealed class CartRepository : ICartRepository
         }
     }
 
+    public async Task<IReadOnlyList<ShoppingCart>> ListInactiveWithItemsAsync(
+        DateTimeOffset inactiveSince,
+        CancellationToken cancellationToken = default)
+    {
+        var entities = await _dbContext.Carts
+            .Include(x => x.Items)
+            .Where(x => x.UpdatedAt <= inactiveSince && x.Items.Count > 0)
+            .ToListAsync(cancellationToken);
+
+        return entities.Select(InstanceMapping.ToDomain).ToList();
+    }
+
+    public async Task<int> DeleteStaleCartsAsync(
+        DateTimeOffset olderThan,
+        CancellationToken cancellationToken = default)
+    {
+        var stale = await _dbContext.Carts
+            .Include(x => x.Items)
+            .Where(x => x.UpdatedAt <= olderThan && x.Items.Count == 0)
+            .ToListAsync(cancellationToken);
+
+        if (stale.Count == 0)
+        {
+            return 0;
+        }
+
+        _dbContext.Carts.RemoveRange(stale);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return stale.Count;
+    }
+
     public async Task DeleteAsync(ShoppingCart cart, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.Carts.FindAsync([cart.Id], cancellationToken);

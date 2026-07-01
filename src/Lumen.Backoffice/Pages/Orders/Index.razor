@@ -14,21 +14,55 @@
     </div>
 </div>
 
-<div class="row g-2 mb-3 align-items-end">
-    <div class="col-md-4">
-        <label class="form-label small text-muted mb-1">Search</label>
-        <input class="form-control" placeholder="Order number, email, or name..."
-               @bind="_search" @bind:event="oninput" @bind:after="ReloadAsync" />
-    </div>
-    <div class="col-md-3">
-        <label class="form-label small text-muted mb-1">Status</label>
-        <select class="form-select" @bind="_statusFilter" @bind:after="ReloadAsync">
-            <option value="">All statuses</option>
-            @foreach (var status in Enum.GetValues<OrderStatus>())
-            {
-                <option value="@status">@status</option>
-            }
-        </select>
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small text-muted mb-1">Search</label>
+                <input class="form-control" placeholder="Order #, email, name..."
+                       @bind="_search" @bind:event="oninput" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Order status</label>
+                <select class="form-select" @bind="_statusFilter" @bind:after="ReloadAsync">
+                    <option value="">All</option>
+                    @foreach (var status in Enum.GetValues<OrderStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">Payment status</label>
+                <select class="form-select" @bind="_paymentStatusFilter" @bind:after="ReloadAsync">
+                    <option value="">All</option>
+                    @foreach (var status in Enum.GetValues<PaymentStatus>())
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">From date</label>
+                <input type="date" class="form-control" @bind="_dateFrom" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-muted mb-1">To date</label>
+                <input type="date" class="form-control" @bind="_dateTo" @bind:after="ReloadAsync" />
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-outline-secondary w-100" @onclick="ClearFiltersAsync">Clear</button>
+            </div>
+        </div>
+        @if (_customerIdFilter is Guid customerId)
+        {
+            <div class="mt-2">
+                <span class="badge bg-info text-dark">
+                    Filtered by customer <code>@customerId</code>
+                    <a class="text-dark ms-1" href="orders">×</a>
+                </span>
+            </div>
+        }
     </div>
 </div>
 
@@ -46,6 +80,9 @@ else if (_orders.Count == 0)
 }
 else
 {
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-muted small">@_orders.Count order(s)</span>
+    </div>
     <div class="table-responsive">
         <table class="table table-hover align-middle">
             <thead class="table-light">
@@ -82,13 +119,24 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "customerId")]
+    public Guid? CustomerIdFilter { get; set; }
+
     private bool _loading = true;
     private string? _error;
     private string _search = string.Empty;
     private string _statusFilter = string.Empty;
+    private string _paymentStatusFilter = string.Empty;
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+    private Guid? _customerIdFilter;
     private IReadOnlyList<OrderDto> _orders = [];
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        _customerIdFilter = CustomerIdFilter;
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
@@ -101,9 +149,25 @@ else
                 ? null
                 : Enum.Parse<OrderStatus>(_statusFilter);
 
+            PaymentStatus? paymentStatus = string.IsNullOrWhiteSpace(_paymentStatusFilter)
+                ? null
+                : Enum.Parse<PaymentStatus>(_paymentStatusFilter);
+
+            DateTimeOffset? from = _dateFrom is { } df
+                ? new DateTimeOffset(df.Date, TimeSpan.Zero)
+                : null;
+
+            DateTimeOffset? to = _dateTo is { } dt
+                ? new DateTimeOffset(dt.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero)
+                : null;
+
             _orders = await OrderService.ListAsync(new OrderListFilter(
                 Status: status,
-                Search: string.IsNullOrWhiteSpace(_search) ? null : _search));
+                PaymentStatus: paymentStatus,
+                CustomerId: _customerIdFilter,
+                Search: string.IsNullOrWhiteSpace(_search) ? null : _search,
+                From: from,
+                To: to));
         }
         catch (Exception ex)
         {
@@ -113,5 +177,17 @@ else
         {
             _loading = false;
         }
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _search = string.Empty;
+        _statusFilter = string.Empty;
+        _paymentStatusFilter = string.Empty;
+        _dateFrom = null;
+        _dateTo = null;
+        _customerIdFilter = null;
+        CustomerIdFilter = null;
+        await ReloadAsync();
     }
 }

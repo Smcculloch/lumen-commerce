@@ -57,6 +57,23 @@ public sealed record CheckoutResult(
 
 public sealed record OrderListFilter(
     OrderStatus? Status = null,
+    PaymentStatus? PaymentStatus = null,
+    Guid? CustomerId = null,
     string? Search = null,
     DateTimeOffset? From = null,
     DateTimeOffset? To = null);
+
+public sealed record OrderHistoryEntryDto(
+    Guid Id,
+    Guid OrderId,
+    OrderHistoryEventType EventType,
+    OrderStatus? PreviousStatus,
+    OrderStatus? NewStatus,
+    string Message,
+    string? Actor,
+    DateTimeOffset CreatedAt);
+
+public sealed record UpdateOrderStatusRequest(
+    OrderStatus Status,
+    string? Note = null,
+    string? Actor = null);

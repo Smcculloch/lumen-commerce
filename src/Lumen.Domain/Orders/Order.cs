@@ -131,6 +131,17 @@ public sealed class Order
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 
+    public void Cancel()
+    {
+        if (Status is OrderStatus.Shipped or OrderStatus.Completed)
+        {
+            throw new InvalidOperationException("Shipped or completed orders cannot be cancelled.");
+        }
+
+        Status = OrderStatus.Cancelled;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
     public void ApplyPaymentOutcome(
         string providerName,
         PaymentStatus paymentStatus,

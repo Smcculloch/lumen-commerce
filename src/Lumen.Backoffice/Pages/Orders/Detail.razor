@@ -33,18 +33,15 @@ else if (_order is not null)
                 <span class="text-muted small">Placed @_order.CreatedAt.LocalDateTime.ToString("f")</span>
             </div>
         </div>
-        <div class="d-flex align-items-end gap-2">
-            <div>
-                <label class="form-label small text-muted mb-1">Update status</label>
-                <select class="form-select form-select-sm" @bind="_selectedStatus" disabled="@_saving">
-                    @foreach (var status in Enum.GetValues<OrderStatus>())
-                    {
-                        <option value="@status">@status</option>
-                    }
-                </select>
-            </div>
-            <button class="btn btn-sm btn-primary" disabled="@(_saving || _selectedStatus == _order.Status)" @onclick="SaveStatusAsync">
-                @(_saving ? "Saving..." : "Save")
+        <div class="d-flex flex-wrap gap-2">
+            @if (CanCancel)
+            {
+                <button class="btn btn-sm btn-outline-danger" disabled="@_actionInProgress" @onclick="CancelOrderAsync">
+                    Cancel order
+                </button>
+            }
+            <button class="btn btn-sm btn-outline-primary" disabled="@_actionInProgress" @onclick="SendNotificationAsync">
+                Send notification
             </button>
         </div>
     </div>
@@ -232,6 +229,41 @@ else if (_order is not null)
         </div>
     </div>
 
+    <div class="row g-3 mt-1">
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header">Update status</div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">New status</label>
+                        <select class="form-select form-select-sm" @bind="_selectedStatus" disabled="@_saving">
+                            @foreach (var status in Enum.GetValues<OrderStatus>())
+                            {
+                                <option value="@status">@status</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Note (optional)</label>
+                        <textarea class="form-control form-control-sm" rows="3" @bind="_statusNote" disabled="@_saving"
+                                  placeholder="Reason or internal note for this status change..."></textarea>
+                    </div>
+                    <button class="btn btn-sm btn-primary" disabled="@(_saving || (_selectedStatus == _order.Status && string.IsNullOrWhiteSpace(_statusNote)))" @onclick="SaveStatusAsync">
+                        @(_saving ? "Saving..." : "Save status")
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header">Order timeline</div>
+                <div class="card-body">
+                    <OrderTimeline Entries="@_history" />
+                </div>
+            </div>
+        </div>
+    </div>
+
     <a class="btn btn-outline-secondary mt-3" href="orders">Back to orders</a>
 }
 
@@ -242,12 +274,15 @@ else if (_order is not null)
     private bool _loading = true;
     private bool _saving;
     private bool _paymentActionInProgress;
+    private bool _actionInProgress;
     private string? _error;
     private string? _bannerMessage;
     private bool _bannerIsError;
     private OrderDto? _order;
     private OrderStatus _selectedStatus;
+    private string _statusNote = string.Empty;
     private decimal _refundAmount;
+    private IReadOnlyList<OrderHistoryEntryDto> _history = [];
 
     private bool CanCapture =>
         _order is not null &&
@@ -259,6 +294,10 @@ else if (_order is not null)
         !string.IsNullOrWhiteSpace(_order.PaymentTransactionId) &&
         _order.PaymentStatus is PaymentStatus.Authorized or PaymentStatus.Captured or PaymentStatus.PartiallyRefunded &&
         _order.AmountRefunded < _order.Subtotal;
+
+    private bool CanCancel =>
+        _order is not null &&
+        _order.Status is not OrderStatus.Cancelled and not OrderStatus.Shipped and not OrderStatus.Completed;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -277,6 +316,7 @@ else if (_order is not null)
             {
                 _selectedStatus = _order.Status;
                 _refundAmount = Math.Max(0, _order.Subtotal - _order.AmountRefunded);
+                _history = await OrderService.GetOrderHistoryAsync(Id);
             }
         }
         catch (Exception ex)
@@ -302,6 +342,7 @@ else if (_order is not null)
         try
         {
             _order = await OrderService.CapturePaymentAsync(_order.Id);
+            _history = await OrderService.GetOrderHistoryAsync(_order.Id);
             _bannerMessage = "Payment captured.";
             _bannerIsError = false;
         }
@@ -330,6 +371,7 @@ else if (_order is not null)
         {
             _order = await OrderService.RefundPaymentAsync(_order.Id, _refundAmount);
             _refundAmount = Math.Max(0, _order.Subtotal - _order.AmountRefunded);
+            _history = await OrderService.GetOrderHistoryAsync(_order.Id);
             _bannerMessage = "Refund processed.";
             _bannerIsError = false;
         }
@@ -356,7 +398,11 @@ else if (_order is not null)
 
         try
         {
-            _order = await OrderService.UpdateStatusAsync(_order.Id, _selectedStatus);
+            _order = await OrderService.UpdateStatusWithNoteAsync(
+                _order.Id,
+                new UpdateOrderStatusRequest(_selectedStatus, _statusNote, "backoffice"));
+            _statusNote = string.Empty;
+            _history = await OrderService.GetOrderHistoryAsync(_order.Id);
             _bannerMessage = "Order status updated.";
             _bannerIsError = false;
         }
@@ -368,6 +414,63 @@ else if (_order is not null)
         finally
         {
             _saving = false;
+        }
+    }
+
+    private async Task CancelOrderAsync()
+    {
+        if (_order is null)
+        {
+            return;
+        }
+
+        _actionInProgress = true;
+        _bannerMessage = null;
+
+        try
+        {
+            _order = await OrderService.CancelOrderAsync(_order.Id, actor: "backoffice");
+            _selectedStatus = _order.Status;
+            _history = await OrderService.GetOrderHistoryAsync(_order.Id);
+            _bannerMessage = "Order cancelled.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _actionInProgress = false;
+        }
+    }
+
+    private async Task SendNotificationAsync()
+    {
+        if (_order is null)
+        {
+            return;
+        }
+
+        _actionInProgress = true;
+        _bannerMessage = null;
+
+        try
+        {
+            _order = await OrderService.SendOrderNotificationAsync(_order.Id, actor: "backoffice");
+            _history = await OrderService.GetOrderHistoryAsync(_order.Id);
+            _bannerMessage = "Notification queued (stub).";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _actionInProgress = false;
         }
     }
 }

@@ -1,0 +1,57 @@
+@using Lumen.Application.Orders.Dtos
+@using Lumen.Domain.Enums
+
+@if (Entries.Count == 0)
+{
+    <p class="text-muted mb-0">No timeline events recorded.</p>
+}
+else
+{
+    <ul class="list-unstyled mb-0">
+        @foreach (var entry in Entries)
+        {
+            <li class="border-start border-2 ps-3 pb-3 ms-2 @TimelineBorderClass(entry.EventType)">
+                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                    <strong class="small">@FormatEventType(entry.EventType)</strong>
+                    <span class="text-muted small">@entry.CreatedAt.LocalDateTime.ToString("g")</span>
+                </div>
+                @if (entry.PreviousStatus is not null && entry.NewStatus is not null)
+                {
+                    <div class="small text-muted mb-1">
+                        @entry.PreviousStatus → @entry.NewStatus
+                    </div>
+                }
+                <p class="small mb-1">@entry.Message</p>
+                @if (!string.IsNullOrWhiteSpace(entry.Actor))
+                {
+                    <span class="badge bg-light text-dark">@entry.Actor</span>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<OrderHistoryEntryDto> Entries { get; set; } = [];
+
+    private static string FormatEventType(OrderHistoryEventType eventType) => eventType switch
+    {
+        OrderHistoryEventType.Created => "Order created",
+        OrderHistoryEventType.StatusChanged => "Status changed",
+        OrderHistoryEventType.PaymentEvent => "Payment",
+        OrderHistoryEventType.Note => "Note",
+        OrderHistoryEventType.Notification => "Notification",
+        OrderHistoryEventType.Cancelled => "Cancelled",
+        _ => eventType.ToString()
+    };
+
+    private static string TimelineBorderClass(OrderHistoryEventType eventType) => eventType switch
+    {
+        OrderHistoryEventType.Cancelled => "border-danger",
+        OrderHistoryEventType.PaymentEvent => "border-info",
+        OrderHistoryEventType.Notification => "border-primary",
+        OrderHistoryEventType.StatusChanged => "border-warning",
+        _ => "border-secondary"
+    };
+}
