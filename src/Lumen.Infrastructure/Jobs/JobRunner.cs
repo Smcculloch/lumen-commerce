@@ -1,18 +1,20 @@
 using Lumen.Application.Jobs;
 using Lumen.Application.Jobs.Dtos;
 using Lumen.Domain.Jobs;
+using Lumen.Infrastructure.Jobs.Handlers;
+using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 
 namespace Lumen.Infrastructure.Jobs;
 
 public sealed class JobRunner : IJobRunner
 {
-    private readonly ISchedulerFactory _schedulerFactory;
+    private readonly IServiceProvider _serviceProvider;
     private readonly IJobExecutionRepository _executionRepository;
 
-    public JobRunner(ISchedulerFactory schedulerFactory, IJobExecutionRepository executionRepository)
+    public JobRunner(IServiceProvider serviceProvider, IJobExecutionRepository executionRepository)
     {
-        _schedulerFactory = schedulerFactory;
+        _serviceProvider = serviceProvider;
         _executionRepository = executionRepository;
     }
 
@@ -41,17 +43,58 @@ public sealed class JobRunner : IJobRunner
             return new JobTriggerResult(false, $"Unknown job '{jobKey}'.");
         }
 
-        var scheduler = await _schedulerFactory.GetScheduler(cancellationToken);
-        var job = new JobKey(jobKey);
-
-        if (!await scheduler.CheckExists(job, cancellationToken))
+        var schedulerFactory = _serviceProvider.GetService<ISchedulerFactory>();
+        if (schedulerFactory is not null)
         {
-            return new JobTriggerResult(false, $"Job '{jobKey}' is not registered with the scheduler.");
+            var scheduler = await schedulerFactory.GetScheduler(cancellationToken);
+            var job = new JobKey(jobKey);
+
+            if (await scheduler.CheckExists(job, cancellationToken))
+            {
+                await scheduler.TriggerJob(job, cancellationToken);
+                return new JobTriggerResult(true, $"Job '{jobKey}' triggered.");
+            }
         }
 
-        await scheduler.TriggerJob(job, cancellationToken);
-        return new JobTriggerResult(true, $"Job '{jobKey}' triggered.");
+        return await RunHandlerDirectlyAsync(jobKey, cancellationToken);
     }
+
+    private async Task<JobTriggerResult> RunHandlerDirectlyAsync(string jobKey, CancellationToken cancellationToken)
+    {
+        await using var scope = _serviceProvider.CreateAsyncScope();
+        var logger = scope.ServiceProvider.GetRequiredService<JobExecutionLogger>();
+
+        try
+        {
+            var message = await logger.RunAsync(
+                jobKey,
+                () => ResolveHandler(scope.ServiceProvider, jobKey, cancellationToken),
+                cancellationToken);
+
+            return new JobTriggerResult(true, message);
+        }
+        catch (Exception ex)
+        {
+            return new JobTriggerResult(false, ex.Message);
+        }
+    }
+
+    private static Task<string> ResolveHandler(
+        IServiceProvider provider,
+        string jobKey,
+        CancellationToken cancellationToken) =>
+        jobKey switch
+        {
+            LumenJobKeys.AbandonedCart =>
+                provider.GetRequiredService<AbandonedCartJobHandler>().ExecuteAsync(cancellationToken),
+            LumenJobKeys.CartCleanup =>
+                provider.GetRequiredService<CartCleanupJobHandler>().ExecuteAsync(cancellationToken),
+            LumenJobKeys.OrderStatus =>
+                provider.GetRequiredService<OrderStatusJobHandler>().ExecuteAsync(cancellationToken),
+            LumenJobKeys.InventorySync =>
+                provider.GetRequiredService<InventorySyncJobHandler>().ExecuteAsync(cancellationToken),
+            _ => throw new InvalidOperationException($"No handler registered for job '{jobKey}'.")
+        };
 
     private static JobExecutionDto Map(JobExecution execution) =>
         new(

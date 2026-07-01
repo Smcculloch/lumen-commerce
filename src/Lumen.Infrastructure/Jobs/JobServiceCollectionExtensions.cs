@@ -1,6 +1,5 @@
 using Lumen.Application.Jobs;
 using Lumen.Application.Jobs.Dtos;
-using Lumen.Application.Orders;
 using Lumen.Infrastructure.Jobs.Handlers;
 using Lumen.Infrastructure.Jobs.Quartz;
 using Lumen.Infrastructure.Repositories;
@@ -14,24 +13,8 @@ public static class JobServiceCollectionExtensions
 {
     public static IServiceCollection AddLumenJobServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<JobOptions>(configuration.GetSection(JobOptions.SectionName));
-
-        services.AddScoped<IJobExecutionRepository, JobExecutionRepository>();
-        services.AddScoped<INotificationLogRepository, NotificationLogRepository>();
-
-        services.AddScoped<JobExecutionLogger>();
-        services.AddScoped<AbandonedCartJobHandler>();
-        services.AddScoped<CartCleanupJobHandler>();
-        services.AddScoped<OrderStatusJobHandler>();
-        services.AddScoped<InventorySyncJobHandler>();
-        services.AddScoped<IJobRunner, JobRunner>();
-
-        return services;
-    }
-
-    public static IServiceCollection AddLumenQuartzScheduler(this IServiceCollection services, IConfiguration configuration)
-    {
         var jobOptions = configuration.GetSection(JobOptions.SectionName).Get<JobOptions>() ?? new JobOptions();
+        services.Configure<JobOptions>(configuration.GetSection(JobOptions.SectionName));
 
         JobRegistry.Initialize(
         [
@@ -56,6 +39,22 @@ public static class JobServiceCollectionExtensions
                 "Placeholder for future inventory synchronization.",
                 jobOptions.InventorySync.CronExpression)
         ]);
+
+        services.AddScoped<IJobExecutionRepository, JobExecutionRepository>();
+        services.AddScoped<INotificationLogRepository, NotificationLogRepository>();
+        services.AddScoped<JobExecutionLogger>();
+        services.AddScoped<AbandonedCartJobHandler>();
+        services.AddScoped<CartCleanupJobHandler>();
+        services.AddScoped<OrderStatusJobHandler>();
+        services.AddScoped<InventorySyncJobHandler>();
+        services.AddScoped<IJobRunner, JobRunner>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddLumenQuartzScheduler(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jobOptions = configuration.GetSection(JobOptions.SectionName).Get<JobOptions>() ?? new JobOptions();
 
         if (!jobOptions.Enabled)
         {

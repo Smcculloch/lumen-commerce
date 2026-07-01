@@ -44,15 +44,18 @@ public static class DependencyInjection
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IOrderHistoryRepository, OrderHistoryRepository>();
-        services.AddLumenJobServices(configuration);
 
         return services;
     }
 
     public static IServiceCollection AddLumenScheduledJobs(
         this IServiceCollection services,
-        IConfiguration configuration) =>
+        IConfiguration configuration)
+    {
+        services.AddLumenJobServices(configuration);
         services.AddLumenQuartzScheduler(configuration);
+        return services;
+    }
 
     public static async Task InitializeLumenDatabaseAsync(this IServiceProvider services)
     {
