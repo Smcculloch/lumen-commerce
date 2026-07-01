@@ -81,11 +81,35 @@ Registered via `AddLumenPayments(configuration)` inside `AddLumenInfrastructure`
 - [x] Error handling is graceful on the checkout page
 - [x] Backoffice shows payment status on order details
 
-## Run commands
+## Run locally
 
 ```bash
-dotnet build src/Lumen.Storefront/Lumen.Storefront.csproj
 dotnet ef database update --project src/Lumen.Infrastructure --startup-project src/Lumen.Backoffice
+dotnet run --project src/Lumen.Storefront --urls http://localhost:5267
+dotnet run --project src/Lumen.Backoffice --urls http://localhost:5258
 ```
 
-Storefront: `http://localhost:5267` | Backoffice: `http://localhost:5258`
+**Try:**
+
+1. Add a product to cart → `/checkout` → place order (payment succeeds) → confirmation shows transaction ID
+2. Repeat with **Simulate payment failure** checked → error on checkout, cart retained
+3. Use email containing `fail@` → payment fails without the checkbox
+4. Backoffice **Orders** → open order → verify payment card, capture, and refund actions
+
+## Post-phase fix
+
+- **Logout redirect** (`f660c35`) — `AccountController.Logout` redirected to non-existent `Home/Index`; fixed to `LocalRedirect("/")` (home is served by `ContentController` at `/`).
+
+## Commits
+
+| Commit | Description |
+|--------|-------------|
+| `69c4472` | Phase 7: payment provider integration |
+| `f660c35` | Fix storefront logout redirect |
+
+## Out of scope (future phases)
+
+- Real payment gateways (Stripe, Klarna, etc.) — abstraction is ready; implement `IPaymentProvider`
+- Payment settings UI in backoffice Settings area
+- Webhooks, 3-D Secure, saved payment methods
+- Partial capture, multi-currency, payment emails
