@@ -91,20 +91,25 @@ public sealed class CartRepository : ICartRepository
     {
         var entities = await _dbContext.Carts
             .Include(x => x.Items)
-            .Where(x => x.UpdatedAt <= inactiveSince && x.Items.Count > 0)
+            .Where(x => x.UpdatedAt <= inactiveSince)
             .ToListAsync(cancellationToken);
 
-        return entities.Select(InstanceMapping.ToDomain).ToList();
+        return entities
+            .Where(x => x.Items.Count > 0)
+            .Select(InstanceMapping.ToDomain)
+            .ToList();
     }
 
     public async Task<int> DeleteStaleCartsAsync(
         DateTimeOffset olderThan,
         CancellationToken cancellationToken = default)
     {
-        var stale = await _dbContext.Carts
+        var candidates = await _dbContext.Carts
             .Include(x => x.Items)
-            .Where(x => x.UpdatedAt <= olderThan && x.Items.Count == 0)
+            .Where(x => x.UpdatedAt <= olderThan)
             .ToListAsync(cancellationToken);
+
+        var stale = candidates.Where(x => x.Items.Count == 0).ToList();
 
         if (stale.Count == 0)
         {
