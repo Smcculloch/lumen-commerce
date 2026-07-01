@@ -25,6 +25,12 @@ public sealed class OrderEntity
     public string BillingCountry { get; set; } = string.Empty;
     public string? OrderNotes { get; set; }
     public OrderStatus Status { get; set; }
+    public PaymentStatus PaymentStatus { get; set; }
+    public string? PaymentProvider { get; set; }
+    public string? PaymentTransactionId { get; set; }
+    public string? PaymentMessage { get; set; }
+    public decimal AmountCaptured { get; set; }
+    public decimal AmountRefunded { get; set; }
     public decimal Subtotal { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

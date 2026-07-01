@@ -1,0 +1,20 @@
+@using Lumen.Domain.Enums
+
+<span class="badge @CssClass">@Status</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public PaymentStatus Status { get; set; }
+
+    private string CssClass => Status switch
+    {
+        PaymentStatus.None => "bg-light text-dark",
+        PaymentStatus.Pending => "bg-warning text-dark",
+        PaymentStatus.Authorized => "bg-info text-dark",
+        PaymentStatus.Captured => "bg-success",
+        PaymentStatus.Failed => "bg-danger",
+        PaymentStatus.Refunded => "bg-secondary",
+        PaymentStatus.PartiallyRefunded => "bg-secondary",
+        _ => "bg-light text-dark"
+    };
+}

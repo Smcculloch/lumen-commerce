@@ -11,8 +11,10 @@ using Lumen.Application.Templates.Management;
 using Lumen.Infrastructure.Persistence;
 using Lumen.Infrastructure.Persistence.Seed;
 using Lumen.Infrastructure.Repositories;
+using Lumen.Infrastructure.Payments;
 using Lumen.Infrastructure.Templates;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -22,9 +24,11 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddLumenInfrastructure(
         this IServiceCollection services,
-        string connectionString = "Data Source=lumencommerce.db")
+        string connectionString,
+        IConfiguration configuration)
     {
         services.AddLumenApplication();
+        services.AddLumenPayments(configuration);
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlite(connectionString));

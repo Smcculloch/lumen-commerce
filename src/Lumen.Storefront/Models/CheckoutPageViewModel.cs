@@ -119,6 +119,9 @@ public sealed class PlaceOrderFormModel
     [StringLength(2000)]
     [Display(Name = "Order notes")]
     public string? OrderNotes { get; set; }
+
+    [Display(Name = "Simulate payment failure (test mode)")]
+    public bool SimulatePaymentFailure { get; set; }
 }
 
 public sealed class OrderConfirmationViewModel
@@ -127,6 +130,8 @@ public sealed class OrderConfirmationViewModel
     public required string CustomerName { get; init; }
     public required string Email { get; init; }
     public decimal Subtotal { get; init; }
+    public Lumen.Domain.Enums.PaymentStatus PaymentStatus { get; init; }
+    public string? PaymentTransactionId { get; init; }
     public IReadOnlyList<CartLineViewModel> Items { get; init; } = [];
 
     public static OrderConfirmationViewModel From(Lumen.Application.Orders.Dtos.OrderDto order) =>
@@ -136,6 +141,8 @@ public sealed class OrderConfirmationViewModel
             CustomerName = order.CustomerName,
             Email = order.Email,
             Subtotal = order.Subtotal,
+            PaymentStatus = order.PaymentStatus,
+            PaymentTransactionId = order.PaymentTransactionId,
             Items = order.Items
                 .Select(i => new CartLineViewModel
                 {

@@ -29,6 +29,7 @@ else if (_order is not null)
             <h1 class="mb-1"><code>@_order.OrderNumber</code></h1>
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <OrderStatusBadge Status="@_order.Status" />
+                <PaymentStatusBadge Status="@_order.PaymentStatus" />
                 <span class="text-muted small">Placed @_order.CreatedAt.LocalDateTime.ToString("f")</span>
             </div>
         </div>
@@ -75,6 +76,68 @@ else if (_order is not null)
                             }
                         </dd>
                     </dl>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Payment</span>
+                    @if (_order.PaymentProvider is not null)
+                    {
+                        <span class="badge bg-light text-dark">@_order.PaymentProvider</span>
+                    }
+                </div>
+                <div class="card-body">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5">Status</dt>
+                        <dd class="col-sm-7"><PaymentStatusBadge Status="@_order.PaymentStatus" /></dd>
+                        <dt class="col-sm-5">Transaction ID</dt>
+                        <dd class="col-sm-7">
+                            @if (string.IsNullOrWhiteSpace(_order.PaymentTransactionId))
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                            else
+                            {
+                                <code class="small">@_order.PaymentTransactionId</code>
+                            }
+                        </dd>
+                        <dt class="col-sm-5">Captured</dt>
+                        <dd class="col-sm-7">@_order.AmountCaptured.ToString("C")</dd>
+                        <dt class="col-sm-5">Refunded</dt>
+                        <dd class="col-sm-7">@_order.AmountRefunded.ToString("C")</dd>
+                        @if (!string.IsNullOrWhiteSpace(_order.PaymentMessage))
+                        {
+                            <dt class="col-sm-5">Message</dt>
+                            <dd class="col-sm-7 small text-muted">@_order.PaymentMessage</dd>
+                        }
+                    </dl>
+
+                    @if (CanCapture || CanRefund)
+                    {
+                        <hr />
+                        <div class="d-flex flex-wrap gap-2 align-items-end">
+                            @if (CanCapture)
+                            {
+                                <button class="btn btn-sm btn-success" disabled="@_paymentActionInProgress" @onclick="CapturePaymentAsync">
+                                    @(_paymentActionInProgress ? "Processing..." : "Capture payment")
+                                </button>
+                            }
+                            @if (CanRefund)
+                            {
+                                <div>
+                                    <label class="form-label small text-muted mb-1">Refund amount</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" class="form-control" min="0.01" step="0.01" @bind="_refundAmount" disabled="@_paymentActionInProgress" />
+                                        <button class="btn btn-outline-danger" disabled="@(_paymentActionInProgress || _refundAmount <= 0)" @onclick="RefundPaymentAsync">
+                                            Refund
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -178,11 +241,24 @@ else if (_order is not null)
 
     private bool _loading = true;
     private bool _saving;
+    private bool _paymentActionInProgress;
     private string? _error;
     private string? _bannerMessage;
     private bool _bannerIsError;
     private OrderDto? _order;
     private OrderStatus _selectedStatus;
+    private decimal _refundAmount;
+
+    private bool CanCapture =>
+        _order is not null &&
+        !string.IsNullOrWhiteSpace(_order.PaymentTransactionId) &&
+        _order.PaymentStatus is PaymentStatus.Authorized or PaymentStatus.Pending;
+
+    private bool CanRefund =>
+        _order is not null &&
+        !string.IsNullOrWhiteSpace(_order.PaymentTransactionId) &&
+        _order.PaymentStatus is PaymentStatus.Authorized or PaymentStatus.Captured or PaymentStatus.PartiallyRefunded &&
+        _order.AmountRefunded < _order.Subtotal;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -200,6 +276,7 @@ else if (_order is not null)
             else
             {
                 _selectedStatus = _order.Status;
+                _refundAmount = Math.Max(0, _order.Subtotal - _order.AmountRefunded);
             }
         }
         catch (Exception ex)
@@ -209,6 +286,61 @@ else if (_order is not null)
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task CapturePaymentAsync()
+    {
+        if (_order is null)
+        {
+            return;
+        }
+
+        _paymentActionInProgress = true;
+        _bannerMessage = null;
+
+        try
+        {
+            _order = await OrderService.CapturePaymentAsync(_order.Id);
+            _bannerMessage = "Payment captured.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _paymentActionInProgress = false;
+        }
+    }
+
+    private async Task RefundPaymentAsync()
+    {
+        if (_order is null)
+        {
+            return;
+        }
+
+        _paymentActionInProgress = true;
+        _bannerMessage = null;
+
+        try
+        {
+            _order = await OrderService.RefundPaymentAsync(_order.Id, _refundAmount);
+            _refundAmount = Math.Max(0, _order.Subtotal - _order.AmountRefunded);
+            _bannerMessage = "Refund processed.";
+            _bannerIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _bannerMessage = ex.Message;
+            _bannerIsError = true;
+        }
+        finally
+        {
+            _paymentActionInProgress = false;
         }
     }
 

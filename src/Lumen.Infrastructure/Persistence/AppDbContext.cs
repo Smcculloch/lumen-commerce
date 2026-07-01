@@ -180,7 +180,11 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(x => x.OrderNumber).IsUnique();
             entity.HasIndex(x => x.Email);
             entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.PaymentStatus);
             entity.HasIndex(x => x.CreatedAt);
+            entity.Property(x => x.PaymentProvider).HasMaxLength(64);
+            entity.Property(x => x.PaymentTransactionId).HasMaxLength(128);
+            entity.Property(x => x.PaymentMessage).HasMaxLength(512);
             entity.Property(x => x.OrderNumber).HasMaxLength(32).IsRequired();
             entity.Property(x => x.CustomerName).HasMaxLength(256).IsRequired();
             entity.Property(x => x.Email).HasMaxLength(256).IsRequired();

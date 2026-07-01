@@ -31,6 +31,12 @@ public sealed record OrderDto(
     OrderAddressDto BillingAddress,
     string? OrderNotes,
     OrderStatus Status,
+    PaymentStatus PaymentStatus,
+    string? PaymentProvider,
+    string? PaymentTransactionId,
+    string? PaymentMessage,
+    decimal AmountCaptured,
+    decimal AmountRefunded,
     decimal Subtotal,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
@@ -43,6 +49,11 @@ public sealed record PlaceOrderRequest(
     OrderAddressDto BillingAddress,
     string? OrderNotes,
     Guid? CustomerId);
+
+public sealed record CheckoutResult(
+    bool PaymentSucceeded,
+    OrderDto Order,
+    string? PaymentError);
 
 public sealed record OrderListFilter(
     OrderStatus? Status = null,

@@ -139,6 +139,20 @@
                             <textarea asp-for="Form.OrderNotes" class="form-control" rows="3"></textarea>
                         </div>
 
+                        <fieldset class="mb-4">
+                            <legend class="h6">Payment</legend>
+                            <p class="text-muted small mb-3">
+                                Payments are processed securely when you place your order.
+                                Development mode uses a simulated payment provider.
+                            </p>
+                            <div class="form-check">
+                                <input asp-for="Form.SimulatePaymentFailure" class="form-check-input" id="simulate-failure" />
+                                <label class="form-check-label" for="simulate-failure">
+                                    Simulate payment failure (test mode)
+                                </label>
+                            </div>
+                        </fieldset>
+
                         @if (!string.IsNullOrWhiteSpace(Model.TermsAndPolicies))
                         {
                             <div class="cms-body border rounded p-3 mb-4 small text-muted">
@@ -146,7 +160,7 @@
                             </div>
                         }
 
-                        <button type="submit" class="btn btn-primary btn-lg">Place order</button>
+                        <button type="submit" class="btn btn-primary btn-lg">Place order &amp; pay</button>
                         <a class="btn btn-link" href="/cart">Back to cart</a>
                     </form>
                 </div>

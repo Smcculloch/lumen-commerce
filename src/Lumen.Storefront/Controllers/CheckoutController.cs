@@ -4,6 +4,7 @@ using Lumen.Application.Content;
 using Lumen.Application.Customers;
 using Lumen.Application.Orders;
 using Lumen.Application.Orders.Dtos;
+using Lumen.Application.Payments.Dtos;
 using Lumen.Domain.Enums;
 using Lumen.Shared.Constants;
 using Lumen.Storefront.Models;
@@ -116,7 +117,7 @@ public class CheckoutController : Controller
 
         try
         {
-            var order = await _orderService.PlaceOrderFromCartAsync(
+            var result = await _orderService.CheckoutWithPaymentAsync(
                 cart,
                 new PlaceOrderRequest(
                     form.CustomerName,
@@ -125,11 +126,28 @@ public class CheckoutController : Controller
                     billing,
                     form.OrderNotes,
                     customerId),
+                new PaymentRequest(
+                    CardholderName: form.CustomerName,
+                    SimulateFailure: form.SimulatePaymentFailure),
                 cancellationToken);
+
+            if (!result.PaymentSucceeded)
+            {
+                ModelState.AddModelError(
+                    string.Empty,
+                    result.PaymentError ?? "Payment could not be processed. Please try again.");
+                var paymentFailedModel = CheckoutPageViewModel.From(
+                    content,
+                    cart,
+                    form,
+                    isAuthenticated: User.Identity?.IsAuthenticated == true);
+                ViewData["Title"] = paymentFailedModel.Content.Title;
+                return View("Index", paymentFailedModel);
+            }
 
             await _cartService.ClearCartAsync(cancellationToken);
 
-            return RedirectToAction(nameof(Confirmation), new { orderNumber = order.OrderNumber });
+            return RedirectToAction(nameof(Confirmation), new { orderNumber = result.Order.OrderNumber });
         }
         catch (Exception ex)
         {

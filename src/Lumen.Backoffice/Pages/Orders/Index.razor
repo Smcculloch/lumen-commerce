@@ -54,6 +54,7 @@ else
                     <th>Customer</th>
                     <th>Email</th>
                     <th>Status</th>
+                    <th>Payment</th>
                     <th class="text-end">Total</th>
                     <th>Placed</th>
                     <th class="text-end">Actions</th>
@@ -67,6 +68,7 @@ else
                         <td>@order.CustomerName</td>
                         <td class="small">@order.Email</td>
                         <td><OrderStatusBadge Status="@order.Status" /></td>
+                        <td><PaymentStatusBadge Status="@order.PaymentStatus" /></td>
                         <td class="text-end fw-semibold">@order.Subtotal.ToString("C")</td>
                         <td class="text-muted small">@order.CreatedAt.LocalDateTime.ToString("g")</td>
                         <td class="text-end">

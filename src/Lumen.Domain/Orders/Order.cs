@@ -16,6 +16,12 @@ public sealed class Order
     public OrderAddress BillingAddress { get; private set; } = null!;
     public string? OrderNotes { get; private set; }
     public OrderStatus Status { get; private set; } = OrderStatus.Pending;
+    public PaymentStatus PaymentStatus { get; private set; } = PaymentStatus.None;
+    public string? PaymentProvider { get; private set; }
+    public string? PaymentTransactionId { get; private set; }
+    public string? PaymentMessage { get; private set; }
+    public decimal AmountCaptured { get; private set; }
+    public decimal AmountRefunded { get; private set; }
     public decimal Subtotal { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; private set; } = DateTimeOffset.UtcNow;
@@ -49,7 +55,8 @@ public sealed class Order
             ShippingAddress = shippingAddress,
             BillingAddress = billingAddress,
             OrderNotes = string.IsNullOrWhiteSpace(orderNotes) ? null : orderNotes.Trim(),
-            Subtotal = lines.Sum(i => i.UnitPrice * i.Quantity)
+            Subtotal = lines.Sum(i => i.UnitPrice * i.Quantity),
+            PaymentStatus = PaymentStatus.Pending
         };
 
         foreach (var line in lines)
@@ -85,6 +92,12 @@ public sealed class Order
         OrderAddress billingAddress,
         string? orderNotes,
         OrderStatus status,
+        PaymentStatus paymentStatus,
+        string? paymentProvider,
+        string? paymentTransactionId,
+        string? paymentMessage,
+        decimal amountCaptured,
+        decimal amountRefunded,
         decimal subtotal,
         DateTimeOffset createdAt,
         DateTimeOffset updatedAt,
@@ -100,6 +113,12 @@ public sealed class Order
             BillingAddress = billingAddress,
             OrderNotes = orderNotes,
             Status = status,
+            PaymentStatus = paymentStatus,
+            PaymentProvider = paymentProvider,
+            PaymentTransactionId = paymentTransactionId,
+            PaymentMessage = paymentMessage,
+            AmountCaptured = amountCaptured,
+            AmountRefunded = amountRefunded,
             Subtotal = subtotal,
             CreatedAt = createdAt,
             UpdatedAt = updatedAt,
@@ -109,6 +128,66 @@ public sealed class Order
     public void SetStatus(OrderStatus status)
     {
         Status = status;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ApplyPaymentOutcome(
+        string providerName,
+        PaymentStatus paymentStatus,
+        string? transactionId,
+        string? message,
+        bool paymentSucceeded)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
+
+        PaymentProvider = providerName.Trim();
+        PaymentStatus = paymentStatus;
+        PaymentTransactionId = transactionId;
+        PaymentMessage = message;
+
+        if (paymentSucceeded)
+        {
+            Status = OrderStatus.Processing;
+            AmountCaptured = Subtotal;
+        }
+
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ApplyPaymentFailure(string providerName, string? message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
+
+        PaymentProvider = providerName.Trim();
+        PaymentStatus = PaymentStatus.Failed;
+        PaymentMessage = message;
+        Status = OrderStatus.Pending;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ApplyCapture(decimal amount, PaymentStatus paymentStatus, string? message)
+    {
+        if (amount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount), "Capture amount cannot be negative.");
+        }
+
+        AmountCaptured = amount;
+        PaymentStatus = paymentStatus;
+        PaymentMessage = message;
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void ApplyRefund(decimal amount, PaymentStatus paymentStatus, string? message)
+    {
+        if (amount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(amount), "Refund amount cannot be negative.");
+        }
+
+        AmountRefunded += amount;
+        PaymentStatus = paymentStatus;
+        PaymentMessage = message;
         UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

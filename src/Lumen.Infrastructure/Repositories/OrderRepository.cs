@@ -89,6 +89,12 @@ public sealed class OrderRepository : IOrderRepository
             ?? throw new InvalidOperationException($"Order '{order.Id}' was not found.");
 
         entity.Status = order.Status;
+        entity.PaymentStatus = order.PaymentStatus;
+        entity.PaymentProvider = order.PaymentProvider;
+        entity.PaymentTransactionId = order.PaymentTransactionId;
+        entity.PaymentMessage = order.PaymentMessage;
+        entity.AmountCaptured = order.AmountCaptured;
+        entity.AmountRefunded = order.AmountRefunded;
         entity.UpdatedAt = order.UpdatedAt;
     }
 
