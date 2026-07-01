@@ -3,6 +3,7 @@ using Lumen.Application.Orders.Dtos;
 using Lumen.Domain.Enums;
 using Lumen.Domain.Orders;
 using Lumen.Infrastructure.Persistence;
+using Lumen.Infrastructure.Persistence.Entities;
 using Lumen.Infrastructure.Persistence.Mapping;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,16 +57,6 @@ public sealed class OrderRepository : IOrderRepository
             query = query.Where(x => x.CustomerId == customerId);
         }
 
-        if (filter.From is { } from)
-        {
-            query = query.Where(x => x.CreatedAt >= from);
-        }
-
-        if (filter.To is { } to)
-        {
-            query = query.Where(x => x.CreatedAt <= to);
-        }
-
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search.Trim();
@@ -77,7 +68,19 @@ public sealed class OrderRepository : IOrderRepository
 
         var entities = await query.ToListAsync(cancellationToken);
 
-        return entities
+        IEnumerable<OrderEntity> filtered = entities;
+
+        if (filter.From is { } from)
+        {
+            filtered = filtered.Where(x => x.CreatedAt >= from);
+        }
+
+        if (filter.To is { } to)
+        {
+            filtered = filtered.Where(x => x.CreatedAt <= to);
+        }
+
+        return filtered
             .OrderByDescending(x => x.CreatedAt)
             .Select(InstanceMapping.ToDomain)
             .ToList();
@@ -89,12 +92,13 @@ public sealed class OrderRepository : IOrderRepository
     {
         var entities = await _dbContext.Orders
             .Include(x => x.Items)
-            .Where(x =>
-                (x.Status == OrderStatus.Pending || x.Status == OrderStatus.Processing) &&
-                x.UpdatedAt <= olderThan)
+            .Where(x => x.Status == OrderStatus.Pending || x.Status == OrderStatus.Processing)
             .ToListAsync(cancellationToken);
 
-        return entities.Select(InstanceMapping.ToDomain).ToList();
+        return entities
+            .Where(x => x.UpdatedAt <= olderThan)
+            .Select(InstanceMapping.ToDomain)
+            .ToList();
     }
 
     public Task<int> CountAsync(CancellationToken cancellationToken = default) =>
